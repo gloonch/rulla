@@ -1,0 +1,6 @@
+**/node_modules
+**/dist
+
+client/src/assets/products
+
+**/.DS_Store

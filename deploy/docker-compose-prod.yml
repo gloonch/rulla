@@ -1,0 +1,80 @@
+services:
+  db:
+    image: docker.abrha.net/postgres:15-alpine
+    container_name: rulla-postgres-prod
+    restart: unless-stopped
+    env_file:
+      - .prod.env
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ../server
+      target: prod
+    container_name: rulla-backend-prod
+    restart: unless-stopped
+    env_file:
+      - .prod.env
+    environment:
+      GOPROXY: https://package-mirror.liara.ir/repository/go/
+      PROJECT_IMAGES_DIR: /seed/project_images
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8080"
+    volumes:
+      - ../client/src/assets/project_images:/seed/project_images:ro
+
+  client:
+    build:
+      context: ../client
+      dockerfile: Dockerfile
+      target: prod
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+        VITE_IMAGE_BASE_URL: ${VITE_IMAGE_BASE_URL:-}
+    container_name: rulla-client-prod
+    restart: unless-stopped
+    depends_on:
+      - backend
+    expose:
+      - "80"
+
+  admin:
+    build:
+      context: ../admin
+      target: prod
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+        VITE_BASE_PATH: ${ADMIN_BASE_PATH:-/admin/}
+    container_name: rulla-admin-prod
+    restart: unless-stopped
+    depends_on:
+      - backend
+    expose:
+      - "80"
+
+  nginx:
+    image: docker.abrha.net/nginx:alpine
+    container_name: rulla-nginx-prod
+    restart: unless-stopped
+    depends_on:
+      - client
+      - admin
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+
+volumes:
+  postgres_data_prod:
