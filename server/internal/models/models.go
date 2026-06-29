@@ -18,6 +18,34 @@ type CourseSignup struct {
 	CreatedAt time.Time `db:"created_at"`
 }
 
+type Category struct {
+	Slug      string    `json:"slug" db:"slug"`
+	Title     string    `json:"title" db:"title"`
+	Subtitle  string    `json:"subtitle" db:"subtitle"`
+	SortOrder int       `json:"sortOrder" db:"sort_order"`
+	Status    string    `json:"status" db:"status"`
+	CreatedAt time.Time `json:"createdAt" db:"created_at"`
+	UpdatedAt time.Time `json:"updatedAt" db:"updated_at"`
+}
+
+type HomepageSection struct {
+	ID               string    `json:"id" db:"id"`
+	Eyebrow          string    `json:"eyebrow" db:"eyebrow"`
+	Title            string    `json:"title" db:"title"`
+	CTALabel         string    `json:"ctaLabel" db:"cta_label"`
+	To               string    `json:"to" db:"to_url"`
+	Alt              string    `json:"alt" db:"alt"`
+	ImageFilename    string    `json:"imageFilename,omitempty" db:"image_filename"`
+	ImageContentType string    `json:"imageContentType,omitempty" db:"image_content_type"`
+	ImageData        []byte    `json:"-" db:"image_data"`
+	ImageURL         string    `json:"imageUrl,omitempty"`
+	ImageClassName   string    `json:"imageClassName,omitempty" db:"image_class_name"`
+	SortOrder        int       `json:"sortOrder" db:"sort_order"`
+	Status           string    `json:"status" db:"status"`
+	CreatedAt        time.Time `json:"createdAt" db:"created_at"`
+	UpdatedAt        time.Time `json:"updatedAt" db:"updated_at"`
+}
+
 type CourseLesson struct {
 	ID        string   `json:"id"`
 	Title     string   `json:"title"`

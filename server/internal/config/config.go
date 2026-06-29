@@ -36,7 +36,9 @@ type DatabaseConfig struct {
 }
 
 type SeedConfig struct {
-	ProjectImagesDir string
+	ProjectImagesDir  string
+	ProductAssetsDir  string
+	HomepageAssetsDir string
 }
 
 type AdminConfig struct {
@@ -73,7 +75,9 @@ func Load() *Config {
 			MinPoolSize:    int32(getEnvAsInt("POSTGRES_MIN_POOL_SIZE", getEnvAsInt("DB_MIN_POOL_SIZE", 2))),
 		},
 		Seed: SeedConfig{
-			ProjectImagesDir: getEnv("PROJECT_IMAGES_DIR", "assets/project_images"),
+			ProjectImagesDir:  getEnv("PROJECT_IMAGES_DIR", "assets/project_images"),
+			ProductAssetsDir:  getEnv("PRODUCT_ASSETS_DIR", "../client/src/assets/products"),
+			HomepageAssetsDir: getEnv("HOMEPAGE_ASSETS_DIR", "../client/src/assets"),
 		},
 		Admin: AdminConfig{
 			Username: getEnv("ADMIN_USERNAME", "admin"),

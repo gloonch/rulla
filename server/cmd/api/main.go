@@ -12,7 +12,6 @@ import (
 	"rulla-server/internal/config"
 	"rulla-server/internal/database"
 	httpapi "rulla-server/internal/http"
-	"rulla-server/internal/repository"
 	"rulla-server/internal/seed"
 
 	"github.com/joho/godotenv"
@@ -31,12 +30,12 @@ func main() {
 	}
 	defer db.Close()
 
-	courseSeedCtx, courseSeedCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	if err := repository.NewCourseRepository(db.Pool()).SeedDefaultCourse(courseSeedCtx); err != nil {
-		courseSeedCancel()
-		log.Fatalf("course seed failed: %v", err)
+	contentSeedCtx, contentSeedCancel := context.WithTimeout(context.Background(), 90*time.Second)
+	if err := seed.Content(contentSeedCtx, db, cfg.Seed.ProductAssetsDir, cfg.Seed.HomepageAssetsDir); err != nil {
+		contentSeedCancel()
+		log.Fatalf("content seed failed: %v", err)
 	}
-	courseSeedCancel()
+	contentSeedCancel()
 
 	seedCtx, seedCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	if err := seed.ProjectImages(seedCtx, db, cfg.Seed.ProjectImagesDir); err != nil {

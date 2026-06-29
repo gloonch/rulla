@@ -30,6 +30,7 @@ type Handler struct {
 	db      *database.PostgresDB
 	cfg     *config.Config
 	courses *repository.CourseRepository
+	content *repository.ContentRepository
 }
 
 const (
@@ -91,7 +92,12 @@ type courseWithImagesResponse struct {
 }
 
 func NewHandler(db *database.PostgresDB, cfg *config.Config) *Handler {
-	return &Handler{db: db, cfg: cfg, courses: repository.NewCourseRepository(db.Pool())}
+	return &Handler{
+		db:      db,
+		cfg:     cfg,
+		courses: repository.NewCourseRepository(db.Pool()),
+		content: repository.NewContentRepository(db.Pool()),
+	}
 }
 
 func (h *Handler) AdminLogin(c *gin.Context) {
@@ -114,6 +120,278 @@ func (h *Handler) AdminLogin(c *gin.Context) {
 			"username": h.cfg.Admin.Username,
 		},
 	})
+}
+
+func (h *Handler) ListCategories(c *gin.Context) {
+	h.listCategories(c, false)
+}
+
+func (h *Handler) ListAdminCategories(c *gin.Context) {
+	h.listCategories(c, true)
+}
+
+func (h *Handler) listCategories(c *gin.Context, includeDrafts bool) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	categories, err := h.content.ListCategories(ctx, includeDrafts)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "دریافت دسته‌بندی‌ها انجام نشد."})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"categories": categories})
+}
+
+func (h *Handler) CreateAdminCategory(c *gin.Context) {
+	var category models.Category
+	if err := c.ShouldBindJSON(&category); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "اطلاعات دسته‌بندی معتبر نیست."})
+		return
+	}
+	if err := validateCategory(category); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	created, err := h.content.CreateCategory(ctx, category)
+	if err != nil {
+		if isUniqueViolation(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "اسلاگ دسته‌بندی تکراری است."})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ساخت دسته‌بندی انجام نشد."})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"category": created})
+}
+
+func (h *Handler) UpdateAdminCategory(c *gin.Context) {
+	var category models.Category
+	if err := c.ShouldBindJSON(&category); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "اطلاعات دسته‌بندی معتبر نیست."})
+		return
+	}
+	if err := validateCategory(category); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	updated, err := h.content.UpdateCategory(ctx, strings.TrimSpace(c.Param("slug")), category)
+	if errors.Is(err, repository.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "دسته‌بندی پیدا نشد."})
+		return
+	}
+	if err != nil {
+		if isUniqueViolation(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "اسلاگ دسته‌بندی تکراری است."})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ویرایش دسته‌بندی انجام نشد."})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"category": updated})
+}
+
+func (h *Handler) DeleteAdminCategory(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	err := h.content.DeleteCategory(ctx, strings.TrimSpace(c.Param("slug")))
+	if errors.Is(err, repository.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "دسته‌بندی پیدا نشد."})
+		return
+	}
+	if err != nil {
+		if isForeignKeyViolation(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "این دسته‌بندی محصول دارد و قابل حذف نیست."})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "حذف دسته‌بندی انجام نشد."})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) ListHomepageSections(c *gin.Context) {
+	h.listHomepageSections(c, false)
+}
+
+func (h *Handler) ListAdminHomepageSections(c *gin.Context) {
+	h.listHomepageSections(c, true)
+}
+
+func (h *Handler) listHomepageSections(c *gin.Context, includeDrafts bool) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	sections, err := h.content.ListHomepageSections(ctx, includeDrafts)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "دریافت بخش‌های صفحه اصلی انجام نشد."})
+		return
+	}
+	h.attachHomepageSectionImageURLs(sections)
+
+	c.JSON(http.StatusOK, gin.H{"sections": sections})
+}
+
+func (h *Handler) CreateAdminHomepageSection(c *gin.Context) {
+	var section models.HomepageSection
+	if err := c.ShouldBindJSON(&section); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "اطلاعات بخش صفحه اصلی معتبر نیست."})
+		return
+	}
+	if err := validateHomepageSection(section); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	created, err := h.content.CreateHomepageSection(ctx, section)
+	if err != nil {
+		if isUniqueViolation(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "شناسه بخش تکراری است."})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ساخت بخش صفحه اصلی انجام نشد."})
+		return
+	}
+	h.attachHomepageSectionImageURL(&created)
+
+	c.JSON(http.StatusCreated, gin.H{"section": created})
+}
+
+func (h *Handler) UpdateAdminHomepageSection(c *gin.Context) {
+	var section models.HomepageSection
+	if err := c.ShouldBindJSON(&section); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "اطلاعات بخش صفحه اصلی معتبر نیست."})
+		return
+	}
+	if err := validateHomepageSection(section); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	updated, err := h.content.UpdateHomepageSection(ctx, strings.TrimSpace(c.Param("id")), section)
+	if errors.Is(err, repository.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "بخش صفحه اصلی پیدا نشد."})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ویرایش بخش صفحه اصلی انجام نشد."})
+		return
+	}
+	h.attachHomepageSectionImageURL(&updated)
+
+	c.JSON(http.StatusOK, gin.H{"section": updated})
+}
+
+func (h *Handler) DeleteAdminHomepageSection(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	err := h.content.DeleteHomepageSection(ctx, strings.TrimSpace(c.Param("id")))
+	if errors.Is(err, repository.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "بخش صفحه اصلی پیدا نشد."})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "حذف بخش صفحه اصلی انجام نشد."})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) UploadAdminHomepageSectionImage(c *gin.Context) {
+	if err := c.Request.ParseMultipartForm(128 << 20); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "فایل تصویر معتبر نیست."})
+		return
+	}
+
+	files := uploadedFiles(c.Request.MultipartForm)
+	if len(files) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "حداقل یک تصویر انتخاب کنید."})
+		return
+	}
+
+	image, err := imageFromUploadHeader(files[0], "تصویر صفحه اصلی", 0, time.Now().UTC())
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+
+	updated, err := h.content.SetHomepageSectionImage(
+		ctx,
+		strings.TrimSpace(c.Param("id")),
+		image.Filename,
+		image.ContentType,
+		image.Data,
+	)
+	if errors.Is(err, repository.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "بخش صفحه اصلی پیدا نشد."})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ذخیره تصویر بخش انجام نشد."})
+		return
+	}
+	h.attachHomepageSectionImageURL(&updated)
+
+	c.JSON(http.StatusOK, gin.H{"section": updated})
+}
+
+func (h *Handler) DeleteAdminHomepageSectionImage(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	updated, err := h.content.ClearHomepageSectionImage(ctx, strings.TrimSpace(c.Param("id")))
+	if errors.Is(err, repository.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "بخش صفحه اصلی پیدا نشد."})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "حذف تصویر بخش انجام نشد."})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"section": updated})
+}
+
+func (h *Handler) GetHomepageSectionImage(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	section, err := h.content.GetHomepageSectionImage(ctx, strings.TrimSpace(c.Param("id")))
+	if errors.Is(err, repository.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "تصویر بخش پیدا نشد."})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "دریافت تصویر بخش انجام نشد."})
+		return
+	}
+
+	c.Header("Cache-Control", "public, max-age=31536000, immutable")
+	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%q", section.ImageFilename))
+	c.Data(http.StatusOK, section.ImageContentType, section.ImageData)
 }
 
 func (h *Handler) CreateContactRequest(c *gin.Context) {
@@ -384,6 +662,10 @@ func (h *Handler) CreateAdminCourse(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "شناسه یا آدرس دوره تکراری است."})
 			return
 		}
+		if isForeignKeyViolation(err) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "دسته‌بندی محصول معتبر نیست."})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ساخت دوره انجام نشد."})
 		return
 	}
@@ -409,6 +691,10 @@ func (h *Handler) UpdateAdminCourse(c *gin.Context) {
 	if err != nil {
 		if isUniqueViolation(err) {
 			c.JSON(http.StatusConflict, gin.H{"error": "شناسه یا آدرس دوره تکراری است."})
+			return
+		}
+		if isForeignKeyViolation(err) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "دسته‌بندی محصول معتبر نیست."})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ویرایش دوره انجام نشد."})
@@ -821,8 +1107,24 @@ func (h *Handler) heroSlideURL(id string) string {
 	return fmt.Sprintf("%s/api/v1/hero-slides/%s/content", strings.TrimRight(h.cfg.App.BaseURL, "/"), id)
 }
 
+func (h *Handler) homepageSectionImageURL(id string) string {
+	return fmt.Sprintf("%s/api/v1/homepage-sections/%s/image", strings.TrimRight(h.cfg.App.BaseURL, "/"), id)
+}
+
 func (h *Handler) courseImageURL(courseID string, imageID string) string {
 	return fmt.Sprintf("%s/api/v1/courses/%s/images/%s/content", strings.TrimRight(h.cfg.App.BaseURL, "/"), courseID, imageID)
+}
+
+func (h *Handler) attachHomepageSectionImageURL(section *models.HomepageSection) {
+	if section.ImageFilename != "" {
+		section.ImageURL = h.homepageSectionImageURL(section.ID)
+	}
+}
+
+func (h *Handler) attachHomepageSectionImageURLs(sections []models.HomepageSection) {
+	for index := range sections {
+		h.attachHomepageSectionImageURL(&sections[index])
+	}
 }
 
 func (h *Handler) courseImagesWithURLs(ctx context.Context, courseID string) ([]models.CourseImage, error) {
@@ -994,6 +1296,34 @@ func isUniqueViolation(err error) bool {
 		return pgErr.Code == "23505"
 	}
 	return false
+}
+
+func isForeignKeyViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23503"
+	}
+	return false
+}
+
+func validateCategory(category models.Category) error {
+	if strings.TrimSpace(category.Slug) == "" {
+		return fmt.Errorf("اسلاگ دسته‌بندی الزامی است.")
+	}
+	if strings.TrimSpace(category.Title) == "" {
+		return fmt.Errorf("نام دسته‌بندی الزامی است.")
+	}
+	return nil
+}
+
+func validateHomepageSection(section models.HomepageSection) error {
+	if strings.TrimSpace(section.Title) == "" {
+		return fmt.Errorf("عنوان بخش الزامی است.")
+	}
+	if strings.TrimSpace(section.To) == "" {
+		return fmt.Errorf("لینک بخش الزامی است.")
+	}
+	return nil
 }
 
 func normalizeDigits(value string) string {

@@ -24,6 +24,8 @@ services:
     environment:
       GOPROXY: https://package-mirror.liara.ir/repository/go/
       PROJECT_IMAGES_DIR: /seed/project_images
+      PRODUCT_ASSETS_DIR: /seed/client_assets/products
+      HOMEPAGE_ASSETS_DIR: /seed/client_assets
     depends_on:
       db:
         condition: service_healthy
@@ -31,6 +33,7 @@ services:
       - "8080"
     volumes:
       - ../client/src/assets/project_images:/seed/project_images:ro
+      - ../client/src/assets:/seed/client_assets:ro
 
   client:
     build:

@@ -160,7 +160,7 @@ p {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 14px;
 }
 
@@ -219,6 +219,53 @@ p {
   gap: 12px;
 }
 
+.management-list {
+  display: grid;
+  gap: 12px;
+}
+
+.management-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  border: 1px solid #e5e0d8;
+  background: #fbfaf8;
+  padding: 12px;
+}
+
+.management-card.with-thumb {
+  grid-template-columns: 112px 1fr auto;
+}
+
+.management-card h3 {
+  margin: 2px 0 6px;
+  font-weight: 500;
+}
+
+.management-card p {
+  margin: 4px 0 0;
+  color: #666666;
+  line-height: 1.7;
+}
+
+.section-thumb {
+  display: grid;
+  width: 112px;
+  aspect-ratio: 1 / 1;
+  place-items: center;
+  background: #ece8df;
+  color: #777777;
+  overflow: hidden;
+  font-size: 0.82rem;
+}
+
+.section-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .product-card {
   display: grid;
   grid-template-columns: 92px 1fr auto;
@@ -275,6 +322,10 @@ p {
   gap: 14px;
 }
 
+.full-field {
+  grid-column: 1 / -1;
+}
+
 .admin-form label,
 .list-editor,
 .image-panel {
@@ -297,6 +348,20 @@ p {
 
 .admin-form textarea {
   resize: vertical;
+}
+
+.file-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .admin-form input:focus,
@@ -405,11 +470,14 @@ th {
   }
 
   .stats-grid,
-  .product-card {
+  .product-card,
+  .management-card,
+  .management-card.with-thumb {
     grid-template-columns: 1fr;
   }
 
-  .product-thumb {
+  .product-thumb,
+  .section-thumb {
     width: 100%;
   }
 

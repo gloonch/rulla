@@ -20,97 +20,6 @@ const BUSINESS_PHONE = "09909038432";
 const WHATSAPP_URL = "https://wa.me/989909038432";
 const SMOOTH_SCROLL_MULTIPLIER = 1.5;
 
-const categories = [
-  {
-    slug: "shomiz",
-    title: "شومیز",
-    subtitle: "برای استایل روزمره و رسمی",
-    cropClass: "crop-0",
-  },
-  {
-    slug: "shalvar",
-    title: "شلوار",
-    subtitle: "برش دقیق، فیت شخصی",
-    cropClass: "crop-1",
-  },
-  {
-    slug: "top",
-    title: "تاپ",
-    subtitle: "سبک، ساده، قابل ست",
-    cropClass: "crop-2",
-  },
-  {
-    slug: "coat",
-    title: "کت",
-    subtitle: "دوخت ساختارمند و شیک",
-    cropClass: "crop-3",
-  },
-  {
-    slug: "evening-dress",
-    title: "لباس مجلسی",
-    subtitle: "دوخته‌شده برای مراسم شما",
-    cropClass: "crop-4",
-  },
-];
-
-const productImageModules = import.meta.glob("./assets/products/**/*.{jpg,jpeg,png,webp,avif}", {
-  eager: true,
-  import: "default",
-  query: "?url",
-});
-
-const categoryFallbacks = {
-  shomiz: { fabric: "ابریشم", color: "سفید" },
-  shalvar: { fabric: "کرپ", color: "سفارشی" },
-  top: { fabric: "ساتن", color: "سفارشی" },
-  coat: { fabric: "فاستونی", color: "سفارشی" },
-  "evening-dress": { fabric: "ساتن", color: "سفارشی" },
-};
-
-function inferFabricFromPath(path, category) {
-  const value = path.toLowerCase();
-  if (value.includes("silk")) return "ابریشم";
-  if (value.includes("satin")) return "ساتن";
-  if (value.includes("linen") || value.includes("leinen")) return "لینن";
-  if (value.includes("wool")) return "پشم";
-  if (value.includes("blazer") || category === "coat") return "فاستونی";
-  return categoryFallbacks[category]?.fabric || "سفارشی";
-}
-
-function inferColorFromPath(path, category) {
-  const value = path.toLowerCase();
-  if (value.includes("black")) return "مشکی";
-  if (value.includes("white") || value.includes("off-white") || value.includes("weiße")) return "سفید";
-  if (value.includes("champagne")) return "شامپاینی";
-  if (value.includes("stone") || value.includes("cream")) return "کرم";
-  return categoryFallbacks[category]?.color || "سفارشی";
-}
-
-function buildProductsFromImages(imageModules) {
-  const counts = {};
-
-  return Object.entries(imageModules)
-    .sort(([firstPath], [secondPath]) => firstPath.localeCompare(secondPath))
-    .map(([path, image]) => {
-      const segments = path.split("/");
-      const category = segments[segments.length - 2];
-      const categoryInfo = categoryBySlug(category);
-      counts[category] = (counts[category] || 0) + 1;
-      const index = String(counts[category]).padStart(2, "0");
-
-      return {
-        slug: `${category}-${index}`,
-        title: `${categoryInfo?.title || "محصول"} ${index}`,
-        category,
-        fabrics: [inferFabricFromPath(path, category)],
-        colors: [inferColorFromPath(path, category)],
-        image,
-      };
-    });
-}
-
-const products = buildProductsFromImages(productImageModules);
-
 const orderSteps = [
   "انتخاب مدل",
   "ثبت اندازه‌ها",
@@ -153,57 +62,6 @@ const reviews = [
   },
 ];
 
-const mainNavigationItems = [
-  { label: "شومیز", to: "/categories/shomiz" },
-  { label: "شلوار", to: "/categories/shalvar" },
-  { label: "تاپ", to: "/categories/top" },
-  { label: "کت", to: "/categories/coat" },
-  { label: "لباس مجلسی", to: "/categories/evening-dress" },
-];
-
-const drawerNavigationItems = [
-  ...mainNavigationItems,
-  { label: "ثبت سفارش", hash: "#order-contact" },
-  { label: "تماس با ما", hash: "#order-contact" },
-];
-
-const footerSections = [
-  {
-    title: "دسته‌بندی‌ها",
-    links: categories.map((category) => ({
-      label: category.title,
-      to: `/categories/${category.slug}`,
-    })),
-  },
-  {
-    title: "خدمات",
-    links: [
-      { label: "سفارش شخصی‌دوزی", to: "/order/start" },
-    ],
-  },
-];
-
-const homepageVisualSections = [
-  {
-    eyebrow: "",
-    title: "لباسی برای اندازه و سلیقه شما",
-    cta: "شروع سفارش",
-    to: "/order/start",
-    image: heroImage,
-    alt: "لباس تک‌دوزی در آتلیه RULLA",
-    imageClassName: "visual-section__image--hero",
-  },
-  ...categories.map((category) => ({
-    eyebrow: category.title,
-    title: category.subtitle,
-    cta: "مشاهده مدل‌ها",
-    to: `/categories/${category.slug}`,
-    image: collectionImage,
-    alt: category.title,
-    imageClassName: category.cropClass,
-  })),
-];
-
 const SCROLL_REVEAL_SELECTOR = [
   ".hero-image",
   ".hero-copy > *",
@@ -237,16 +95,93 @@ const RevealReadyContext = createContext({
   shouldRunReveal: false,
 });
 
+const SiteContentContext = createContext({
+  categories: [],
+  products: [],
+  homepageSections: [],
+  status: { type: "loading", message: "" },
+});
+
 function apiEndpoint(path) {
   return `${API_BASE_URL}/${path.replace(/^\/+/, "")}`;
 }
 
-function categoryBySlug(slug) {
-  return categories.find((category) => category.slug === slug);
+async function apiRequest(path, options = {}) {
+  const response = await fetch(apiEndpoint(path), options);
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error || "دریافت اطلاعات انجام نشد.");
+  }
+  return response.json();
 }
 
-function productBySlug(slug) {
-  return products.find((product) => product.slug === slug);
+function useSiteContent() {
+  return useContext(SiteContentContext);
+}
+
+function normalizeProduct(product) {
+  return {
+    ...product,
+    category: product.term || "",
+    fabrics: product.outcomes?.length ? product.outcomes : ["سفارشی"],
+    colors: product.audience?.length ? product.audience : ["سفارشی"],
+    image: product.imageUrl || collectionImage,
+  };
+}
+
+function normalizeHomepageSection(section) {
+  return {
+    ...section,
+    cta: section.ctaLabel || "مشاهده",
+    image: section.imageUrl || (section.id === "hero" ? heroImage : collectionImage),
+  };
+}
+
+function SiteContentProvider({ children }) {
+  const [content, setContent] = useState({
+    categories: [],
+    products: [],
+    homepageSections: [],
+    status: { type: "loading", message: "در حال دریافت اطلاعات..." },
+  });
+
+  useEffect(() => {
+    let isActive = true;
+
+    Promise.all([
+      apiRequest("categories"),
+      apiRequest("courses"),
+      apiRequest("homepage-sections"),
+    ])
+      .then(([categoriesData, productsData, sectionsData]) => {
+        if (!isActive) return;
+        setContent({
+          categories: categoriesData.categories || [],
+          products: (productsData.courses || []).map(normalizeProduct),
+          homepageSections: (sectionsData.sections || []).map(normalizeHomepageSection),
+          status: { type: "idle", message: "" },
+        });
+      })
+      .catch((error) => {
+        if (!isActive) return;
+        setContent((current) => ({
+          ...current,
+          status: { type: "error", message: error.message },
+        }));
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  return <SiteContentContext.Provider value={content}>{children}</SiteContentContext.Provider>;
+}
+
+function ContentStateNotice() {
+  const { status } = useSiteContent();
+  if (status.type === "idle") return null;
+  return <StatusMessage status={status} />;
 }
 
 function normalizeDigits(value) {
@@ -583,8 +518,18 @@ function GarmentImage({ cropClass = "", alt, className = "", src = collectionIma
 
 function SiteHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { categories } = useSiteContent();
   const location = useLocation();
   const navigate = useNavigate();
+  const mainNavigationItems = categories.map((category) => ({
+    label: category.title,
+    to: `/categories/${category.slug}`,
+  }));
+  const drawerNavigationItems = [
+    ...mainNavigationItems,
+    { label: "ثبت سفارش", hash: "#order-contact" },
+    { label: "تماس با ما", hash: "#order-contact" },
+  ];
 
   useEffect(() => {
     document.body.classList.toggle("menu-open", isMenuOpen);
@@ -659,6 +604,23 @@ function SiteHeader() {
 }
 
 function SiteFooter() {
+  const { categories } = useSiteContent();
+  const footerSections = [
+    {
+      title: "دسته‌بندی‌ها",
+      links: categories.map((category) => ({
+        label: category.title,
+        to: `/categories/${category.slug}`,
+      })),
+    },
+    {
+      title: "خدمات",
+      links: [
+        { label: "سفارش شخصی‌دوزی", to: "/order/start" },
+      ],
+    },
+  ];
+
   return (
     <footer className="site-footer">
       <Link to="/" className="footer-brand">RULLA</Link>
@@ -760,6 +722,8 @@ function EditorialProcessSection() {
 }
 
 function CategoryCards() {
+  const { categories } = useSiteContent();
+
   return (
     <section className="section" aria-labelledby="category-heading">
       <div className="section-heading">
@@ -767,9 +731,9 @@ function CategoryCards() {
         <h2 id="category-heading">دسته‌بندی‌ها</h2>
       </div>
       <div className="category-stack">
-        {categories.map((category) => (
+        {categories.map((category, index) => (
           <Link key={category.slug} to={`/categories/${category.slug}`} className="category-card">
-            <GarmentImage cropClass={category.cropClass} alt={category.title} />
+            <GarmentImage cropClass={`crop-${index % 5}`} alt={category.title} />
             <span>
               <strong>{category.title}</strong>
               <small>{category.subtitle}</small>
@@ -868,10 +832,13 @@ function AppointmentCta() {
 }
 
 function HomePage() {
+  const { homepageSections } = useSiteContent();
+
   return (
     <PageShell>
       <main className="home-editorial">
-        {homepageVisualSections.map((section, index) => (
+        <ContentStateNotice />
+        {homepageSections.map((section, index) => (
           <VisualCampaignSection key={`${section.eyebrow}-${index}`} section={section} index={index} />
         ))}
         <EditorialProcessSection />
@@ -881,13 +848,16 @@ function HomePage() {
 }
 
 function CategoriesPage() {
+  const { categories } = useSiteContent();
+
   return (
     <PageShell>
       <main className="page-main">
+        <ContentStateNotice />
         <div className="category-stack page-category-stack">
-          {categories.map((category) => (
+          {categories.map((category, index) => (
             <Link key={category.slug} to={`/categories/${category.slug}`} className="category-card">
-              <GarmentImage cropClass={category.cropClass} alt={category.title} />
+              <GarmentImage cropClass={`crop-${index % 5}`} alt={category.title} />
               <span>
                 <strong>{category.title}</strong>
                 <small>{category.subtitle}</small>
@@ -903,11 +873,22 @@ function CategoriesPage() {
 
 function CategoryPage() {
   const { slug } = useParams();
-  const category = categoryBySlug(slug);
+  const { categories, products, status } = useSiteContent();
+  const category = categories.find((item) => item.slug === slug);
 
   const visibleProducts = useMemo(() => {
     return products.filter((product) => product.category === slug);
-  }, [slug]);
+  }, [products, slug]);
+
+  if (!category && status.type !== "idle") {
+    return (
+      <PageShell>
+        <main className="page-main">
+          <ContentStateNotice />
+        </main>
+      </PageShell>
+    );
+  }
 
   if (!category) {
     return <NotFoundPage />;
@@ -916,6 +897,7 @@ function CategoryPage() {
   return (
     <PageShell>
       <main className="page-main category-listing-page">
+        <ContentStateNotice />
         <div className="product-grid listing-grid">
           {visibleProducts.map((product) => (
             <ProductCard key={product.slug} product={product} />
@@ -928,7 +910,18 @@ function CategoryPage() {
 
 function ProductPage() {
   const { slug } = useParams();
-  const product = productBySlug(slug);
+  const { products, status } = useSiteContent();
+  const product = products.find((item) => item.slug === slug);
+
+  if (!product && status.type !== "idle") {
+    return (
+      <PageShell>
+        <main className="page-main">
+          <ContentStateNotice />
+        </main>
+      </PageShell>
+    );
+  }
 
   if (!product) {
     return <NotFoundPage />;
@@ -958,7 +951,8 @@ function ProductPage() {
 
 function OrderStartPage() {
   const [searchParams] = useSearchParams();
-  const selectedProduct = productBySlug(searchParams.get("model"));
+  const { products } = useSiteContent();
+  const selectedProduct = products.find((product) => product.slug === searchParams.get("model"));
   const [form, setForm] = useState({
     model: selectedProduct?.slug || "",
     fabric: "",
@@ -988,6 +982,7 @@ function OrderStartPage() {
   return (
     <PageShell>
       <main className="page-main form-page">
+        <ContentStateNotice />
         <form className="rulla-form" onSubmit={handleSubmit}>
           <label>
             مدل
@@ -1237,22 +1232,24 @@ export default function App() {
   return (
     <LuxuryFadeLoader>
       <BrowserRouter>
-        <ScrollToTop />
-        <SmoothScrollController />
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/categories" element={<CategoriesPage />} />
-          <Route path="/categories/:slug" element={<CategoryPage />} />
-          <Route path="/products/:slug" element={<ProductPage />} />
-          <Route path="/order/start" element={<OrderStartPage />} />
-          <Route path="/order/measurements" element={<MeasurementsPage />} />
-          <Route path="/consultation" element={<ConsultationPage />} />
-          <Route path="/how-it-works" element={<HowItWorksPage />} />
-          <Route path="/size-guide" element={<SizeGuidePage />} />
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/contact" element={<ContactPage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
+        <SiteContentProvider>
+          <ScrollToTop />
+          <SmoothScrollController />
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/categories" element={<CategoriesPage />} />
+            <Route path="/categories/:slug" element={<CategoryPage />} />
+            <Route path="/products/:slug" element={<ProductPage />} />
+            <Route path="/order/start" element={<OrderStartPage />} />
+            <Route path="/order/measurements" element={<MeasurementsPage />} />
+            <Route path="/consultation" element={<ConsultationPage />} />
+            <Route path="/how-it-works" element={<HowItWorksPage />} />
+            <Route path="/size-guide" element={<SizeGuidePage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/contact" element={<ContactPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </SiteContentProvider>
       </BrowserRouter>
     </LuxuryFadeLoader>
   );
