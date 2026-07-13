@@ -27,6 +27,7 @@ const emptySectionForm = {
   id: "",
   eyebrow: "",
   title: "",
+  subtitle: "",
   ctaLabel: "",
   to: "",
   alt: "",
@@ -101,6 +102,7 @@ function sectionToForm(section) {
     id: section?.id || "",
     eyebrow: section?.eyebrow || "",
     title: section?.title || "",
+    subtitle: section?.subtitle || "",
     ctaLabel: section?.ctaLabel || "",
     to: section?.to || "",
     alt: section?.alt || "",
@@ -115,6 +117,7 @@ function sectionFromForm(form) {
     id: form.id.trim(),
     eyebrow: form.eyebrow.trim(),
     title: form.title.trim(),
+    subtitle: form.subtitle.trim(),
     ctaLabel: form.ctaLabel.trim(),
     to: form.to.trim(),
     alt: form.alt.trim(),
@@ -614,6 +617,7 @@ function LandingSectionManager({ sections, token, onReload, onStatus }) {
             <div>
               <h3>{section.title}</h3>
               <p dir="ltr">{section.id}</p>
+              {section.subtitle ? <p>{section.subtitle}</p> : null}
               <p>{section.eyebrow || "بدون برچسب"} · {section.ctaLabel || "بدون دکمه"}</p>
             </div>
             <div className="product-actions">
@@ -649,6 +653,10 @@ function LandingSectionManager({ sections, token, onReload, onStatus }) {
             <label>
               عنوان
               <input value={form.title} onChange={updateField("title")} required />
+            </label>
+            <label className="full-field">
+              توضیح کوتاه
+              <textarea value={form.subtitle} onChange={updateField("subtitle")} rows={3} />
             </label>
             <label>
               برچسب کوچک

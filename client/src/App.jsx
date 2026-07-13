@@ -132,7 +132,7 @@ function normalizeProduct(product) {
 function normalizeHomepageSection(section) {
   return {
     ...section,
-    cta: section.ctaLabel || "مشاهده",
+    cta: section.ctaLabel || "",
     image: section.imageUrl || (section.id === "hero" ? heroImage : collectionImage),
   };
 }
@@ -568,6 +568,14 @@ function SiteHeader() {
           <Link to="/" className="brand-mark" onClick={closeMenu}>
             RULLA
           </Link>
+          <div className="header-contact-actions" aria-label="راه‌های ارتباط سریع">
+            <a href={`tel:${BUSINESS_PHONE}`} className="header-phone-link">
+              {BUSINESS_PHONE}
+            </a>
+            <a href={WHATSAPP_URL} className="header-whatsapp-link" target="_blank" rel="noreferrer" aria-label="ارتباط در واتساپ">
+              <WhatsAppIcon />
+            </a>
+          </div>
         </div>
 
         <nav className="desktop-nav" aria-label="دسته‌بندی‌های اصلی">
@@ -658,23 +666,78 @@ function PageShell({ children }) {
   );
 }
 
-function VisualCampaignSection({ section, index }) {
+function VisualCampaignCarousel({ sections }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    if (sections.length < 2) return undefined;
+    const intervalId = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % sections.length);
+    }, 3000);
+    return () => window.clearInterval(intervalId);
+  }, [sections.length]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [sections.length]);
+
+  if (!sections.length) return null;
+
   return (
-    <section className="visual-section" aria-labelledby={`visual-section-${index}`}>
+    <section className="visual-section visual-section--carousel" aria-label="معرفی RULLA">
+      {sections.map((section, index) => {
+        const isActive = index === activeIndex;
+        return (
+          <article
+            key={section.id || `${section.eyebrow}-${index}`}
+            className={`visual-section__slide ${isActive ? "is-active" : ""}`}
+            aria-hidden={!isActive}
+          >
+            <img
+              src={section.image}
+              alt={section.alt}
+              className={`visual-section__image ${section.imageClassName || ""}`}
+              loading={index === 0 ? "eager" : "lazy"}
+              decoding="async"
+            />
+            <div className="visual-section__overlay" />
+            <div className="visual-section__content">
+              <p className="visual-section__eyebrow">{section.eyebrow}</p>
+              <h1>{section.title}</h1>
+              {section.subtitle ? <p className="visual-section__subtitle">{section.subtitle}</p> : null}
+              {section.cta && section.to ? (
+                <Link to={section.to} className="visual-section__cta" tabIndex={isActive ? 0 : -1}>
+                  {section.cta}
+                </Link>
+              ) : null}
+            </div>
+          </article>
+        );
+      })}
+    </section>
+  );
+}
+
+function VisualCampaignSection({ section }) {
+  return (
+    <section className="visual-section" aria-labelledby={`visual-section-${section.id}`}>
       <img
         src={section.image}
         alt={section.alt}
         className={`visual-section__image ${section.imageClassName || ""}`}
-        loading={index === 0 ? "eager" : "lazy"}
+        loading="lazy"
         decoding="async"
       />
       <div className="visual-section__overlay" />
       <div className="visual-section__content">
-        <p className="visual-section__eyebrow">{section.eyebrow}</p>
-        <h1 id={`visual-section-${index}`}>{section.title}</h1>
-        <Link to={section.to} className="visual-section__cta">
-          {section.cta}
-        </Link>
+        {section.eyebrow ? <p className="visual-section__eyebrow">{section.eyebrow}</p> : null}
+        <h2 id={`visual-section-${section.id}`}>{section.title}</h2>
+        {section.subtitle ? <p className="visual-section__subtitle">{section.subtitle}</p> : null}
+        {section.cta && section.to ? (
+          <Link to={section.to} className="visual-section__cta">
+            {section.cta}
+          </Link>
+        ) : null}
       </div>
     </section>
   );
@@ -833,13 +896,16 @@ function AppointmentCta() {
 
 function HomePage() {
   const { homepageSections } = useSiteContent();
+  const heroSections = homepageSections.filter((section) => section.id?.startsWith("hero-"));
+  const staticSections = homepageSections.filter((section) => !section.id?.startsWith("hero-"));
 
   return (
     <PageShell>
       <main className="home-editorial">
         <ContentStateNotice />
-        {homepageSections.map((section, index) => (
-          <VisualCampaignSection key={`${section.eyebrow}-${index}`} section={section} index={index} />
+        <VisualCampaignCarousel sections={heroSections} />
+        {staticSections.map((section) => (
+          <VisualCampaignSection key={section.id} section={section} />
         ))}
         <EditorialProcessSection />
       </main>

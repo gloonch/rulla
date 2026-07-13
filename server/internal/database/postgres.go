@@ -108,6 +108,7 @@ func (p *PostgresDB) createSchema(ctx context.Context) error {
 			id TEXT PRIMARY KEY,
 			eyebrow TEXT NOT NULL DEFAULT '',
 			title TEXT NOT NULL,
+			subtitle TEXT NOT NULL DEFAULT '',
 			cta_label TEXT NOT NULL DEFAULT '',
 			to_url TEXT NOT NULL DEFAULT '',
 			alt TEXT NOT NULL DEFAULT '',
@@ -120,6 +121,7 @@ func (p *PostgresDB) createSchema(ctx context.Context) error {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
+		`ALTER TABLE homepage_sections ADD COLUMN IF NOT EXISTS subtitle TEXT NOT NULL DEFAULT ''`,
 		`CREATE INDEX IF NOT EXISTS idx_homepage_sections_status_sort_order ON homepage_sections (status, sort_order, id)`,
 		`CREATE TABLE IF NOT EXISTS courses (
 			id TEXT PRIMARY KEY,

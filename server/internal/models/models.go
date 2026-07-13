@@ -32,6 +32,7 @@ type HomepageSection struct {
 	ID               string    `json:"id" db:"id"`
 	Eyebrow          string    `json:"eyebrow" db:"eyebrow"`
 	Title            string    `json:"title" db:"title"`
+	Subtitle         string    `json:"subtitle" db:"subtitle"`
 	CTALabel         string    `json:"ctaLabel" db:"cta_label"`
 	To               string    `json:"to" db:"to_url"`
 	Alt              string    `json:"alt" db:"alt"`

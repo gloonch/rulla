@@ -119,7 +119,7 @@ func (r *ContentRepository) DeleteCategory(ctx context.Context, slug string) err
 func (r *ContentRepository) ListHomepageSections(ctx context.Context, includeDrafts bool) ([]models.HomepageSection, error) {
 	rows, err := r.pool.Query(
 		ctx,
-		`SELECT id, eyebrow, title, cta_label, to_url, alt, image_filename, image_content_type,
+		`SELECT id, eyebrow, title, subtitle, cta_label, to_url, alt, image_filename, image_content_type,
 			image_class_name, sort_order, status, created_at, updated_at
 		 FROM homepage_sections
 		 WHERE ($1 OR status <> 'draft')
@@ -148,7 +148,7 @@ func (r *ContentRepository) ListHomepageSections(ctx context.Context, includeDra
 func (r *ContentRepository) GetHomepageSection(ctx context.Context, id string, includeDrafts bool) (models.HomepageSection, error) {
 	row := r.pool.QueryRow(
 		ctx,
-		`SELECT id, eyebrow, title, cta_label, to_url, alt, image_filename, image_content_type,
+		`SELECT id, eyebrow, title, subtitle, cta_label, to_url, alt, image_filename, image_content_type,
 			image_class_name, sort_order, status, created_at, updated_at
 		 FROM homepage_sections
 		 WHERE id = $1 AND ($2 OR status <> 'draft')
@@ -175,12 +175,13 @@ func (r *ContentRepository) CreateHomepageSection(ctx context.Context, section m
 	_, err := r.pool.Exec(
 		ctx,
 		`INSERT INTO homepage_sections (
-			id, eyebrow, title, cta_label, to_url, alt, image_filename, image_content_type,
+			id, eyebrow, title, subtitle, cta_label, to_url, alt, image_filename, image_content_type,
 			image_data, image_class_name, sort_order, status, created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
 		section.ID,
 		section.Eyebrow,
 		section.Title,
+		section.Subtitle,
 		section.CTALabel,
 		section.To,
 		section.Alt,
@@ -206,19 +207,21 @@ func (r *ContentRepository) UpdateHomepageSection(ctx context.Context, id string
 		`UPDATE homepage_sections SET
 			eyebrow = $2,
 			title = $3,
-			cta_label = $4,
-			to_url = $5,
-			alt = $6,
-			image_class_name = $7,
-			sort_order = $8,
-			status = $9,
-			updated_at = $10
+			subtitle = $4,
+			cta_label = $5,
+			to_url = $6,
+			alt = $7,
+			image_class_name = $8,
+			sort_order = $9,
+			status = $10,
+			updated_at = $11
 		 WHERE id = $1
-		 RETURNING id, eyebrow, title, cta_label, to_url, alt, image_filename, image_content_type,
+		 RETURNING id, eyebrow, title, subtitle, cta_label, to_url, alt, image_filename, image_content_type,
 			image_class_name, sort_order, status, created_at, updated_at`,
 		section.ID,
 		section.Eyebrow,
 		section.Title,
+		section.Subtitle,
 		section.CTALabel,
 		section.To,
 		section.Alt,
@@ -254,7 +257,7 @@ func (r *ContentRepository) SetHomepageSectionImage(ctx context.Context, id stri
 			image_data = $4,
 			updated_at = $5
 		 WHERE id = $1
-		 RETURNING id, eyebrow, title, cta_label, to_url, alt, image_filename, image_content_type,
+		 RETURNING id, eyebrow, title, subtitle, cta_label, to_url, alt, image_filename, image_content_type,
 			image_class_name, sort_order, status, created_at, updated_at`,
 		strings.TrimSpace(id),
 		strings.TrimSpace(filename),
@@ -278,7 +281,7 @@ func (r *ContentRepository) ClearHomepageSectionImage(ctx context.Context, id st
 			image_data = NULL,
 			updated_at = $2
 		 WHERE id = $1
-		 RETURNING id, eyebrow, title, cta_label, to_url, alt, image_filename, image_content_type,
+		 RETURNING id, eyebrow, title, subtitle, cta_label, to_url, alt, image_filename, image_content_type,
 			image_class_name, sort_order, status, created_at, updated_at`,
 		strings.TrimSpace(id),
 		time.Now().UTC(),
@@ -330,6 +333,7 @@ func scanHomepageSection(scanner interface {
 		&section.ID,
 		&section.Eyebrow,
 		&section.Title,
+		&section.Subtitle,
 		&section.CTALabel,
 		&section.To,
 		&section.Alt,
@@ -355,6 +359,7 @@ func normalizeHomepageSection(section *models.HomepageSection) {
 	section.ID = strings.TrimSpace(section.ID)
 	section.Eyebrow = strings.TrimSpace(section.Eyebrow)
 	section.Title = strings.TrimSpace(section.Title)
+	section.Subtitle = strings.TrimSpace(section.Subtitle)
 	section.CTALabel = strings.TrimSpace(section.CTALabel)
 	section.To = strings.TrimSpace(section.To)
 	section.Alt = strings.TrimSpace(section.Alt)

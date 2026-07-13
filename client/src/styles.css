@@ -193,6 +193,54 @@ p {
   justify-self: start;
 }
 
+.header-contact-actions {
+  display: inline-flex;
+  justify-self: end;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.header-phone-link,
+.header-whatsapp-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border: 1px solid #d9d9d9;
+  background: #ffffff;
+  color: #111111;
+}
+
+.header-phone-link {
+  direction: ltr;
+  padding: 0 10px;
+  font-family: "Times New Roman", Georgia, serif;
+  font-size: 0.78rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.header-whatsapp-link {
+  width: 34px;
+  min-width: 34px;
+  color: #ffffff;
+  background: #111111;
+}
+
+.header-whatsapp-link svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.header-phone-link:hover,
+.header-phone-link:focus-visible,
+.header-whatsapp-link:hover,
+.header-whatsapp-link:focus-visible {
+  border-color: #111111;
+}
+
 .menu-overlay {
   position: fixed;
   inset: 0;
@@ -276,6 +324,24 @@ p {
   background: #111111;
 }
 
+.visual-section--carousel {
+  isolation: isolate;
+}
+
+.visual-section__slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 900ms ease;
+}
+
+.visual-section__slide.is-active {
+  z-index: 1;
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .visual-section__image {
   position: absolute;
   inset: 0;
@@ -289,6 +355,42 @@ p {
 
 .visual-section__image--hero {
   object-position: 54% center;
+}
+
+.visual-section__image--hero-collection {
+  object-position: 50% center;
+}
+
+.visual-section__image--hero-ready {
+  object-position: 64% center;
+}
+
+.visual-section__image--hero-fit {
+  object-position: 58% center;
+}
+
+.visual-section__image--hero-custom {
+  object-position: 56% center;
+}
+
+.visual-section__image--blouse {
+  object-position: 58% center;
+}
+
+.visual-section__image--dress {
+  object-position: 64% center;
+}
+
+.visual-section__image--coat-feature {
+  object-position: 56% center;
+}
+
+.visual-section__image--skirt {
+  object-position: 57% center;
+}
+
+.visual-section__image--top-feature {
+  object-position: 58% center;
 }
 
 .visual-section__overlay {
@@ -323,11 +425,20 @@ p {
   line-height: 1.7;
 }
 
-.visual-section__content h1 {
+.visual-section__content h1,
+.visual-section__content h2 {
   max-width: 760px;
   font-size: clamp(1.45rem, 5vw, 2rem);
   font-weight: 600;
   line-height: 1.75;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.34);
+}
+
+.visual-section__subtitle {
+  max-width: 680px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.9rem;
+  line-height: 2;
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.34);
 }
 
@@ -1069,9 +1180,15 @@ p {
     gap: 14px;
   }
 
-  .visual-section__content h1 {
+  .visual-section__content h1,
+  .visual-section__content h2 {
     font-size: clamp(1.75rem, 2.4vw, 2.45rem);
     line-height: 1.55;
+  }
+
+  .visual-section__subtitle {
+    font-size: 1rem;
+    line-height: 2;
   }
 
   .visual-section__cta {

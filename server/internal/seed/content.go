@@ -30,6 +30,7 @@ type defaultHomepageSection struct {
 	ID             string
 	Eyebrow        string
 	Title          string
+	Subtitle       string
 	CTALabel       string
 	To             string
 	Alt            string
@@ -47,12 +48,104 @@ var defaultCategories = []defaultCategory{
 }
 
 var defaultHomepageSections = []defaultHomepageSection{
-	{ID: "hero", Title: "لباسی برای اندازه و سلیقه شما", CTALabel: "شروع سفارش", To: "/order/start", Alt: "لباس تک‌دوزی در آتلیه RULLA", Asset: "rulla-hero.png", ImageClassName: "visual-section__image--hero", SortOrder: 10},
-	{ID: "shomiz", Eyebrow: "شومیز", Title: "برای استایل روزمره و رسمی", CTALabel: "مشاهده مدل‌ها", To: "/categories/shomiz", Alt: "شومیز", Asset: "rulla-collection.png", ImageClassName: "crop-0", SortOrder: 20},
-	{ID: "shalvar", Eyebrow: "شلوار", Title: "برش دقیق، فیت شخصی", CTALabel: "مشاهده مدل‌ها", To: "/categories/shalvar", Alt: "شلوار", Asset: "rulla-collection.png", ImageClassName: "crop-1", SortOrder: 30},
-	{ID: "top", Eyebrow: "تاپ", Title: "سبک، ساده، قابل ست", CTALabel: "مشاهده مدل‌ها", To: "/categories/top", Alt: "تاپ", Asset: "rulla-collection.png", ImageClassName: "crop-2", SortOrder: 40},
-	{ID: "coat", Eyebrow: "کت", Title: "دوخت ساختارمند و شیک", CTALabel: "مشاهده مدل‌ها", To: "/categories/coat", Alt: "کت", Asset: "rulla-collection.png", ImageClassName: "crop-3", SortOrder: 50},
-	{ID: "evening-dress", Eyebrow: "لباس مجلسی", Title: "دوخته‌شده برای مراسم شما", CTALabel: "مشاهده مدل‌ها", To: "/categories/evening-dress", Alt: "لباس مجلسی", Asset: "rulla-collection.png", ImageClassName: "crop-4", SortOrder: 60},
+	{
+		ID:             "hero-collection",
+		Eyebrow:        "RULLA COLLECTION",
+		Title:          "مدل دلخواهتان را از میان سبک‌های مختلف انتخاب کنید",
+		Subtitle:       "از لباس‌های روزمره تا ست‌های رسمی و مجلسی، هر مدل با اندازه، پارچه و جزئیات موردنظر شما آماده می‌شود.",
+		CTALabel:       "ثبت سفارش",
+		To:             "/order/start",
+		Alt:            "کالکشن لباس‌های قابل سفارش RULLA",
+		Asset:          "section_hero/rulla-hero-collection.png",
+		ImageClassName: "visual-section__image--hero-collection",
+		SortOrder:      10,
+	},
+	{
+		ID:             "hero-ready",
+		Eyebrow:        "READY FOR YOU",
+		Title:          "لباسی که برای شما دوخته شده، آماده تحویل است",
+		Subtitle:       "هر سفارش بعد از انتخاب مدل، تنظیم اندازه‌ها و اجرای جزئیات، با دقت نهایی آماده می‌شود.",
+		CTALabel:       "تماس برای سفارش",
+		To:             "/#order-contact",
+		Alt:            "لباس آماده تحویل در آتلیه RULLA",
+		Asset:          "section_hero/rulla-hero-ready.png",
+		ImageClassName: "visual-section__image--hero-ready",
+		SortOrder:      20,
+	},
+	{
+		ID:             "hero-fit",
+		Eyebrow:        "CUSTOM FIT",
+		Title:          "تمرکز روی فیت، فرم بدن و جزئیات",
+		Subtitle:       "اندازه‌ها، قد لباس، فرم سرشانه و تنخور نهایی با دقت بررسی می‌شود تا لباس فقط زیبا نباشد؛ درست روی بدن بنشیند.",
+		CTALabel:       "درخواست مشاوره",
+		To:             "/consultation",
+		Alt:            "اندازه‌گیری اختصاصی برای فیت لباس",
+		Asset:          "section_hero/rulla-hero-fit.png",
+		ImageClassName: "visual-section__image--hero-fit",
+		SortOrder:      30,
+	},
+	{
+		ID:             "hero-custom",
+		Eyebrow:        "FROM IDEA TO GARMENT",
+		Title:          "از انتخاب مدل تا دوخت نهایی، همه‌چیز قابل شخصی‌سازی است",
+		Subtitle:       "پارچه، رنگ، فرم یقه، قد، آستین و جزئیات دوخت بر اساس سلیقه و نیاز شما انتخاب می‌شود.",
+		CTALabel:       "ارتباط با اپراتور",
+		To:             "/contact",
+		Alt:            "طراحی و شخصی‌سازی لباس در آتلیه RULLA",
+		Asset:          "section_hero/rulla-hero-custom.png",
+		ImageClassName: "visual-section__image--hero-custom",
+		SortOrder:      40,
+	},
+	{
+		ID:             "blouse",
+		Title:          "شومیز و بلوز زنانه با طراحی مینیمال، دوخت دقیق و تنخور شیک",
+		CTALabel:       "مشاهده شومیز و بلوز",
+		To:             "/categories/blouse",
+		Alt:            "شومیز و بلوز زنانه RULLA",
+		Asset:          "blouse/rulla-blouse.png",
+		ImageClassName: "visual-section__image--blouse",
+		SortOrder:      50,
+	},
+	{
+		ID:             "dress",
+		Title:          "دوخت اختصاصی لباس مجلسی",
+		CTALabel:       "مشاهده لباس مجلسی",
+		To:             "/categories/evening-dress",
+		Alt:            "لباس مجلسی دوخت اختصاصی RULLA",
+		Asset:          "dress/rulla-dress.png",
+		ImageClassName: "visual-section__image--dress",
+		SortOrder:      60,
+	},
+	{
+		ID:             "coat-feature",
+		Title:          "کت و پالتو زنانه با دوخت اختصاصی",
+		CTALabel:       "مشاهده کت و پالتو",
+		To:             "/categories/blazer",
+		Alt:            "کت و پالتو زنانه RULLA",
+		Asset:          "coat/rulla-coat.png",
+		ImageClassName: "visual-section__image--coat-feature",
+		SortOrder:      70,
+	},
+	{
+		ID:             "skirt",
+		Title:          "دامن؛ ظرافت در برش و حرکت",
+		CTALabel:       "مشاهده دامن",
+		To:             "/categories/skirt",
+		Alt:            "دامن زنانه RULLA",
+		Asset:          "skirt/rulla-skirt.png",
+		ImageClassName: "visual-section__image--skirt",
+		SortOrder:      80,
+	},
+	{
+		ID:             "top-feature",
+		Title:          "تاپ زنانه با درخشش لطیف و ظریف",
+		CTALabel:       "مشاهده تاپ",
+		To:             "/categories/top",
+		Alt:            "تاپ زنانه RULLA",
+		Asset:          "top/rulla-top.png",
+		ImageClassName: "visual-section__image--top-feature",
+		SortOrder:      90,
+	},
 }
 
 var categoryFallbacks = map[string]struct {
@@ -130,10 +223,18 @@ func seedDefaultCategories(ctx context.Context, pool *pgxpool.Pool) error {
 
 func seedDefaultHomepageSections(ctx context.Context, pool *pgxpool.Pool, assetsDir string) error {
 	var count int
-	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM homepage_sections`).Scan(&count); err != nil {
-		return fmt.Errorf("count homepage sections: %w", err)
+	if err := pool.QueryRow(
+		ctx,
+		`SELECT COUNT(*)
+		 FROM homepage_sections
+		 WHERE id IN (
+			'hero-collection', 'hero-ready', 'hero-fit', 'hero-custom',
+			'blouse', 'dress', 'coat-feature', 'skirt', 'top-feature'
+		 )`,
+	).Scan(&count); err != nil {
+		return fmt.Errorf("count hero homepage sections: %w", err)
 	}
-	if count > 0 {
+	if count == len(defaultHomepageSections) {
 		return nil
 	}
 
@@ -146,13 +247,14 @@ func seedDefaultHomepageSections(ctx context.Context, pool *pgxpool.Pool, assets
 		if _, err := pool.Exec(
 			ctx,
 			`INSERT INTO homepage_sections (
-				id, eyebrow, title, cta_label, to_url, alt, image_filename, image_content_type,
+				id, eyebrow, title, subtitle, cta_label, to_url, alt, image_filename, image_content_type,
 				image_data, image_class_name, sort_order, status, created_at, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active',$12,$12)
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'active',$13,$13)
 			ON CONFLICT (id) DO NOTHING`,
 			section.ID,
 			section.Eyebrow,
 			section.Title,
+			section.Subtitle,
 			section.CTALabel,
 			section.To,
 			section.Alt,
@@ -165,6 +267,34 @@ func seedDefaultHomepageSections(ctx context.Context, pool *pgxpool.Pool, assets
 		); err != nil {
 			return fmt.Errorf("seed homepage section %s: %w", section.ID, err)
 		}
+	}
+	for _, section := range defaultHomepageSections {
+		if section.CTALabel == "" || section.To == "" {
+			continue
+		}
+		if _, err := pool.Exec(
+			ctx,
+			`UPDATE homepage_sections
+			 SET cta_label = $2, to_url = $3, updated_at = $4
+			 WHERE id = $1 AND cta_label = ''`,
+			section.ID,
+			section.CTALabel,
+			section.To,
+			now,
+		); err != nil {
+			return fmt.Errorf("ensure homepage section link %s: %w", section.ID, err)
+		}
+	}
+
+	_, err := pool.Exec(
+		ctx,
+		`UPDATE homepage_sections
+		 SET status = 'draft', updated_at = $1
+		 WHERE id IN ('hero', 'shomiz', 'shalvar', 'top', 'coat', 'evening-dress')`,
+		now,
+	)
+	if err != nil {
+		return fmt.Errorf("draft legacy homepage sections: %w", err)
 	}
 	return nil
 }
