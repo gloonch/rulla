@@ -1,7 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api/v1").replace(/\/+$/, "");
 const TOKEN_KEY = "rulla_admin_token";
+const ADMIN_BASE_PATH = (() => {
+  const base = (import.meta.env.VITE_BASE_PATH || "/").replace(/^\/+|\/+$/g, "");
+  return base ? `/${base}` : "";
+})();
 
 const emptyProductForm = {
   id: "",
@@ -36,6 +40,16 @@ const emptySectionForm = {
   sortOrder: 0,
 };
 
+const navItems = [
+  { key: "products", to: "/products", label: "محصولات", shortLabel: "محصول" },
+  { key: "categories", to: "/categories", label: "دسته‌بندی‌ها", shortLabel: "دسته" },
+  { key: "homepage-sections", to: "/homepage-sections", label: "صفحه اصلی", shortLabel: "خانه" },
+  { key: "contact-requests", to: "/contact-requests", label: "پیام‌ها", shortLabel: "پیام" },
+  { key: "settings", to: "/settings", label: "تنظیمات", shortLabel: "تنظیم" },
+];
+
+const AdminContext = createContext(null);
+
 function apiEndpoint(path) {
   return `${API_BASE_URL}/${path.replace(/^\/+/, "")}`;
 }
@@ -60,6 +74,80 @@ async function apiRequest(path, { token, ...options } = {}) {
   return response.json();
 }
 
+function normalizeRoutePath(path) {
+  const cleanPath = `/${String(path || "/").replace(/^\/+/, "")}`.replace(/\/+$/, "");
+  return cleanPath || "/";
+}
+
+function currentAdminPath() {
+  let pathname = window.location.pathname || "/";
+  if (ADMIN_BASE_PATH && pathname === ADMIN_BASE_PATH) return "/";
+  if (ADMIN_BASE_PATH && pathname.startsWith(`${ADMIN_BASE_PATH}/`)) {
+    pathname = pathname.slice(ADMIN_BASE_PATH.length) || "/";
+  }
+  return normalizeRoutePath(pathname);
+}
+
+function adminUrl(path) {
+  return `${ADMIN_BASE_PATH}${normalizeRoutePath(path)}` || "/";
+}
+
+function parseRoute(path) {
+  const segments = normalizeRoutePath(path).split("/").filter(Boolean);
+  const [section, identifier, action] = segments;
+
+  if (!section) return { section: "products", view: "list" };
+  if (section === "products") {
+    if (!identifier) return { section, view: "list" };
+    if (identifier === "new") return { section, view: "new" };
+    if (action === "edit") return { section, view: "edit", id: decodeURIComponent(identifier) };
+  }
+  if (section === "categories") {
+    if (!identifier) return { section, view: "list" };
+    if (identifier === "new") return { section, view: "new" };
+    if (action === "edit") return { section, view: "edit", slug: decodeURIComponent(identifier) };
+  }
+  if (section === "homepage-sections") {
+    if (!identifier) return { section, view: "list" };
+    if (identifier === "new") return { section, view: "new" };
+    if (action === "edit") return { section, view: "edit", id: decodeURIComponent(identifier) };
+  }
+  if (section === "contact-requests" && !identifier) return { section, view: "list" };
+  if (section === "settings" && !identifier) return { section, view: "list" };
+
+  return { section: "not-found", view: "not-found" };
+}
+
+function useAdminRouter() {
+  const [path, setPath] = useState(currentAdminPath);
+
+  const navigate = useCallback((nextPath, options = {}) => {
+    const normalized = normalizeRoutePath(nextPath);
+    const nextUrl = adminUrl(normalized);
+    if (options.replace) {
+      window.history.replaceState({}, "", nextUrl);
+    } else {
+      window.history.pushState({}, "", nextUrl);
+    }
+    setPath(normalized);
+    window.scrollTo({ top: 0, left: 0 });
+  }, []);
+
+  useEffect(() => {
+    const syncPath = () => setPath(currentAdminPath());
+    window.addEventListener("popstate", syncPath);
+    return () => window.removeEventListener("popstate", syncPath);
+  }, []);
+
+  return { path, route: parseRoute(path), navigate };
+}
+
+function useAdminData() {
+  const context = useContext(AdminContext);
+  if (!context) throw new Error("AdminContext is missing");
+  return context;
+}
+
 function formatDate(value) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("fa-IR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
@@ -74,7 +162,20 @@ function categoryTitle(categories, slug) {
 }
 
 function compactList(items) {
-  return items.map((item) => item.trim()).filter(Boolean);
+  return (items || []).map((item) => item.trim()).filter(Boolean);
+}
+
+function truncateText(value, maxLength = 120) {
+  const text = String(value || "").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1)}…`;
+}
+
+function statusLabel(status) {
+  if (status === "draft") return "پیش‌نویس";
+  if (status === "active") return "فعال";
+  if (status === "in_progress" || status === "published") return "فعال";
+  return status || "-";
 }
 
 function categoryToForm(category) {
@@ -155,7 +256,7 @@ function productFromForm(form, categories = []) {
     duration: "",
     summary: "",
     description: "",
-    status: "in_progress",
+    status: form.status || "in_progress",
     imageId: form.imageId.trim(),
     sortOrder: Number(form.sortOrder) || 0,
     outcomes: compactList(form.fabrics),
@@ -177,6 +278,22 @@ function newProductForm(categories = []) {
 function StatusMessage({ status }) {
   if (!status?.message) return null;
   return <p className={`status-message ${status.type}`} role={status.type === "error" ? "alert" : "status"}>{status.message}</p>;
+}
+
+function AdminLink({ to, className = "", children }) {
+  const { navigate } = useAdminData();
+  return (
+    <a
+      href={adminUrl(to)}
+      className={className}
+      onClick={(event) => {
+        event.preventDefault();
+        navigate(to);
+      }}
+    >
+      {children}
+    </a>
+  );
 }
 
 function LoginScreen({ onLogin }) {
@@ -244,22 +361,49 @@ function StatBox({ label, value }) {
   );
 }
 
-function ProductCard({ product, categories, onEdit, onDelete, busy }) {
+function PageHeader({ title, eyebrow, description, action }) {
+  return (
+    <div className="section-header page-title-row">
+      <div>
+        <p className="eyebrow">{eyebrow}</p>
+        <h2>{title}</h2>
+        {description ? <p>{description}</p> : null}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function NotFoundPanel({ title = "موردی پیدا نشد", backTo = "/products", backLabel = "بازگشت" }) {
+  return (
+    <section className="panel-section">
+      <h2>{title}</h2>
+      <p className="empty-state">این رکورد در داده‌های فعلی وجود ندارد.</p>
+      <div className="form-actions">
+        <AdminLink to={backTo} className="button primary">{backLabel}</AdminLink>
+      </div>
+    </section>
+  );
+}
+
+function ProductCard({ product, categories, onDelete, busy }) {
   return (
     <article className="product-card">
       <div className="product-thumb">
         {product.imageUrl ? <img src={product.imageUrl} alt={product.title} loading="lazy" /> : <span>بدون تصویر</span>}
       </div>
-      <div>
+      <div className="card-copy">
         <p className="product-category">{categoryTitle(categories, product.term)}</p>
         <h3>{product.title || "محصول بدون عنوان"}</h3>
         <p>{product.outcomes?.[0] || "پارچه ثبت نشده"} · {product.audience?.[0] || "رنگ ثبت نشده"}</p>
+        <div className="meta-row">
+          <span>{statusLabel(product.status)}</span>
+          <span>ترتیب {product.sortOrder || 0}</span>
+        </div>
       </div>
       <div className="product-actions">
-        <button type="button" className="button secondary" onClick={() => onEdit(product)}>
-          ویرایش
-        </button>
-        <button type="button" className="button ghost danger" onClick={() => onDelete(product.id)} disabled={busy}>
+        <AdminLink to={`/products/${encodeURIComponent(product.id)}/edit`} className="button secondary">ویرایش</AdminLink>
+        <button type="button" className="button ghost danger" onClick={() => onDelete(product)} disabled={busy}>
           {busy ? "در حال حذف..." : "حذف"}
         </button>
       </div>
@@ -281,7 +425,7 @@ function ProductImagePanel({ selectedId, form, images, imageById, busy, onUpload
   return (
     <fieldset className="image-panel">
       <legend>تصاویر محصول</legend>
-      {!selectedId ? <p className="hint">برای آپلود تصویر، اول محصول را ذخیره کنید.</p> : null}
+      {!selectedId ? <p className="hint">آپلود تصویر پس از ذخیره محصول فعال می‌شود.</p> : null}
 
       <div className="image-upload-grid">
         <label>
@@ -306,7 +450,7 @@ function ProductImagePanel({ selectedId, form, images, imageById, busy, onUpload
                 <button type="button" className="button secondary" onClick={() => onPickMain(image.id)} disabled={image.id === form.imageId}>
                   {image.id === form.imageId ? "تصویر اصلی" : "انتخاب اصلی"}
                 </button>
-                <button type="button" className="button ghost danger" onClick={() => onDeleteImage(image.id)} disabled={busy === `image-${image.id}`}>
+                <button type="button" className="button ghost danger" onClick={() => onDeleteImage(image)} disabled={busy === `image-${image.id}`}>
                   حذف
                 </button>
               </div>
@@ -318,611 +462,25 @@ function ProductImagePanel({ selectedId, form, images, imageById, busy, onUpload
   );
 }
 
-function CategoryManager({ categories, token, onReload, onStatus }) {
-  const [selectedSlug, setSelectedSlug] = useState("");
-  const [form, setForm] = useState(emptyCategoryForm);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [busy, setBusy] = useState("");
-
-  const updateField = (field) => (event) => {
-    setForm((current) => ({ ...current, [field]: event.target.value }));
-  };
-
-  const handleNew = () => {
-    setSelectedSlug("");
-    setForm(emptyCategoryForm);
-    setIsFormOpen(true);
-  };
-
-  const handleEdit = (category) => {
-    setSelectedSlug(category.slug);
-    setForm(categoryToForm(category));
-    setIsFormOpen(true);
-  };
-
-  const handleCancel = () => {
-    setSelectedSlug("");
-    setForm(emptyCategoryForm);
-    setIsFormOpen(false);
-  };
-
-  const handleSave = async (event) => {
-    event.preventDefault();
-    setBusy("save-category");
-    try {
-      const payload = categoryFromForm(form);
-      if (selectedSlug) {
-        await apiRequest(`admin/categories/${encodeURIComponent(selectedSlug)}`, {
-          method: "PUT",
-          token,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-      } else {
-        await apiRequest("admin/categories", {
-          method: "POST",
-          token,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-      }
-      await onReload();
-      setSelectedSlug(payload.slug);
-      setIsFormOpen(true);
-      onStatus({ type: "success", message: "دسته‌بندی ذخیره شد." });
-    } catch (error) {
-      onStatus({ type: "error", message: error.message });
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const handleDelete = async (slug) => {
-    if (!window.confirm("این دسته‌بندی حذف شود؟")) return;
-    setBusy(`delete-category-${slug}`);
-    try {
-      await apiRequest(`admin/categories/${encodeURIComponent(slug)}`, { method: "DELETE", token });
-      if (slug === selectedSlug) handleCancel();
-      await onReload();
-      onStatus({ type: "success", message: "دسته‌بندی حذف شد." });
-    } catch (error) {
-      onStatus({ type: "error", message: error.message });
-    } finally {
-      setBusy("");
-    }
-  };
-
-  return (
-    <section className="panel-section">
-      <div className="section-header">
-        <div>
-          <p className="eyebrow">CATEGORIES</p>
-          <h2>دسته‌بندی‌ها</h2>
-        </div>
-        <button type="button" className="button primary" onClick={handleNew}>
-          دسته‌بندی جدید
-        </button>
-      </div>
-
-      <div className="management-list">
-        {categories.length ? categories.map((category) => (
-          <article key={category.slug} className="management-card">
-            <div>
-              <h3>{category.title}</h3>
-              <p dir="ltr">{category.slug}</p>
-              <p>{category.subtitle || "بدون توضیح"}</p>
-            </div>
-            <div className="product-actions">
-              <button type="button" className="button secondary" onClick={() => handleEdit(category)}>
-                ویرایش
-              </button>
-              <button
-                type="button"
-                className="button ghost danger"
-                onClick={() => handleDelete(category.slug)}
-                disabled={busy === `delete-category-${category.slug}`}
-              >
-                حذف
-              </button>
-            </div>
-          </article>
-        )) : <p className="empty-state">هنوز دسته‌بندی ثبت نشده است.</p>}
-      </div>
-
-      {isFormOpen ? (
-        <form className="admin-form product-form" onSubmit={handleSave}>
-          <div className="form-title-row">
-            <h3>{selectedSlug ? `ویرایش ${selectedSlug}` : "دسته‌بندی جدید"}</h3>
-            <button type="button" className="button ghost" onClick={handleCancel}>
-              بستن فرم
-            </button>
-          </div>
-          <div className="form-grid">
-            <label>
-              نام
-              <input value={form.title} onChange={updateField("title")} required />
-            </label>
-            <label>
-              اسلاگ
-              <input value={form.slug} onChange={updateField("slug")} dir="ltr" required />
-            </label>
-            <label>
-              ترتیب
-              <input value={form.sortOrder} onChange={updateField("sortOrder")} type="number" />
-            </label>
-            <label>
-              وضعیت
-              <select value={form.status} onChange={updateField("status")}>
-                <option value="active">فعال</option>
-                <option value="draft">پیش‌نویس</option>
-              </select>
-            </label>
-            <label className="full-field">
-              توضیح کوتاه
-              <input value={form.subtitle} onChange={updateField("subtitle")} />
-            </label>
-          </div>
-          <div className="form-actions">
-            <button type="submit" className="button primary" disabled={busy === "save-category"}>
-              ذخیره دسته‌بندی
-            </button>
-          </div>
-        </form>
-      ) : null}
-    </section>
-  );
-}
-
-function LandingSectionManager({ sections, token, onReload, onStatus }) {
-  const [selectedId, setSelectedId] = useState("");
-  const [form, setForm] = useState(emptySectionForm);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [busy, setBusy] = useState("");
-
-  const selectedSection = selectedId ? sections.find((section) => section.id === selectedId) : null;
-
-  useEffect(() => {
-    if (!selectedSection) return;
-    setForm(sectionToForm(selectedSection));
-  }, [selectedSection]);
-
-  const updateField = (field) => (event) => {
-    setForm((current) => ({ ...current, [field]: event.target.value }));
-  };
-
-  const handleNew = () => {
-    const timestamp = Date.now();
-    setSelectedId("");
-    setForm({ ...emptySectionForm, id: `section-${timestamp}` });
-    setIsFormOpen(true);
-  };
-
-  const handleEdit = (section) => {
-    setSelectedId(section.id);
-    setForm(sectionToForm(section));
-    setIsFormOpen(true);
-  };
-
-  const handleCancel = () => {
-    setSelectedId("");
-    setForm(emptySectionForm);
-    setIsFormOpen(false);
-  };
-
-  const handleSave = async (event) => {
-    event.preventDefault();
-    setBusy("save-section");
-    try {
-      const payload = sectionFromForm(form);
-      const data = selectedId
-        ? await apiRequest(`admin/homepage-sections/${encodeURIComponent(selectedId)}`, {
-            method: "PUT",
-            token,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          })
-        : await apiRequest("admin/homepage-sections", {
-            method: "POST",
-            token,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-      const saved = data.section;
-      setSelectedId(saved.id);
-      setForm(sectionToForm(saved));
-      setIsFormOpen(true);
-      await onReload();
-      onStatus({ type: "success", message: "بخش صفحه اصلی ذخیره شد." });
-    } catch (error) {
-      onStatus({ type: "error", message: error.message });
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("این بخش از صفحه اصلی حذف شود؟")) return;
-    setBusy(`delete-section-${id}`);
-    try {
-      await apiRequest(`admin/homepage-sections/${encodeURIComponent(id)}`, { method: "DELETE", token });
-      if (id === selectedId) handleCancel();
-      await onReload();
-      onStatus({ type: "success", message: "بخش صفحه اصلی حذف شد." });
-    } catch (error) {
-      onStatus({ type: "error", message: error.message });
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const handleImageUpload = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file || !selectedId) return;
-    setBusy("section-image");
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-      const data = await apiRequest(`admin/homepage-sections/${encodeURIComponent(selectedId)}/image`, {
-        method: "POST",
-        token,
-        body: formData,
-      });
-      setForm(sectionToForm(data.section));
-      await onReload();
-      onStatus({ type: "success", message: "تصویر بخش ذخیره شد." });
-    } catch (error) {
-      onStatus({ type: "error", message: error.message });
-    } finally {
-      setBusy("");
-      event.target.value = "";
-    }
-  };
-
-  const handleImageDelete = async () => {
-    if (!selectedId || !window.confirm("تصویر این بخش حذف شود؟")) return;
-    setBusy("section-image-delete");
-    try {
-      const data = await apiRequest(`admin/homepage-sections/${encodeURIComponent(selectedId)}/image`, {
-        method: "DELETE",
-        token,
-      });
-      setForm(sectionToForm(data.section));
-      await onReload();
-      onStatus({ type: "success", message: "تصویر بخش حذف شد." });
-    } catch (error) {
-      onStatus({ type: "error", message: error.message });
-    } finally {
-      setBusy("");
-    }
-  };
-
-  return (
-    <section className="panel-section">
-      <div className="section-header">
-        <div>
-          <p className="eyebrow">HOMEPAGE</p>
-          <h2>بخش‌های صفحه اصلی</h2>
-        </div>
-        <button type="button" className="button primary" onClick={handleNew}>
-          بخش جدید
-        </button>
-      </div>
-
-      <div className="management-list">
-        {sections.length ? sections.map((section) => (
-          <article key={section.id} className="management-card with-thumb">
-            <div className="section-thumb">
-              {section.imageUrl ? <img src={section.imageUrl} alt={section.alt || section.title} loading="lazy" /> : <span>بدون تصویر</span>}
-            </div>
-            <div>
-              <h3>{section.title}</h3>
-              <p dir="ltr">{section.id}</p>
-              {section.subtitle ? <p>{section.subtitle}</p> : null}
-              <p>{section.eyebrow || "بدون برچسب"} · {section.ctaLabel || "بدون دکمه"}</p>
-            </div>
-            <div className="product-actions">
-              <button type="button" className="button secondary" onClick={() => handleEdit(section)}>
-                ویرایش
-              </button>
-              <button
-                type="button"
-                className="button ghost danger"
-                onClick={() => handleDelete(section.id)}
-                disabled={busy === `delete-section-${section.id}`}
-              >
-                حذف
-              </button>
-            </div>
-          </article>
-        )) : <p className="empty-state">هنوز بخشی برای صفحه اصلی ثبت نشده است.</p>}
-      </div>
-
-      {isFormOpen ? (
-        <form className="admin-form product-form" onSubmit={handleSave}>
-          <div className="form-title-row">
-            <h3>{selectedId ? `ویرایش ${selectedId}` : "بخش جدید"}</h3>
-            <button type="button" className="button ghost" onClick={handleCancel}>
-              بستن فرم
-            </button>
-          </div>
-          <div className="form-grid">
-            <label>
-              شناسه
-              <input value={form.id} onChange={updateField("id")} dir="ltr" required disabled={Boolean(selectedId)} />
-            </label>
-            <label>
-              عنوان
-              <input value={form.title} onChange={updateField("title")} required />
-            </label>
-            <label className="full-field">
-              توضیح کوتاه
-              <textarea value={form.subtitle} onChange={updateField("subtitle")} rows={3} />
-            </label>
-            <label>
-              برچسب کوچک
-              <input value={form.eyebrow} onChange={updateField("eyebrow")} />
-            </label>
-            <label>
-              متن دکمه
-              <input value={form.ctaLabel} onChange={updateField("ctaLabel")} />
-            </label>
-            <label>
-              لینک
-              <input value={form.to} onChange={updateField("to")} dir="ltr" required />
-            </label>
-            <label>
-              متن جایگزین تصویر
-              <input value={form.alt} onChange={updateField("alt")} />
-            </label>
-            <label>
-              ترتیب
-              <input value={form.sortOrder} onChange={updateField("sortOrder")} type="number" />
-            </label>
-            <label>
-              وضعیت
-              <select value={form.status} onChange={updateField("status")}>
-                <option value="active">فعال</option>
-                <option value="draft">پیش‌نویس</option>
-              </select>
-            </label>
-            <label>
-              کلاس تصویر
-              <input value={form.imageClassName} onChange={updateField("imageClassName")} dir="ltr" />
-            </label>
-          </div>
-
-          <fieldset className="image-panel">
-            <legend>تصویر بخش</legend>
-            {selectedSection?.imageUrl ? <img className="main-preview" src={selectedSection.imageUrl} alt={selectedSection.alt || selectedSection.title} /> : null}
-            <div className="form-actions">
-              <label className="button secondary file-button">
-                آپلود تصویر
-                <input type="file" accept="image/*" onChange={handleImageUpload} disabled={!selectedId || busy === "section-image"} />
-              </label>
-              {selectedSection?.imageUrl ? (
-                <button type="button" className="button ghost danger" onClick={handleImageDelete} disabled={busy === "section-image-delete"}>
-                  حذف تصویر
-                </button>
-              ) : null}
-            </div>
-            {!selectedId ? <p className="hint">برای آپلود تصویر ابتدا بخش را ذخیره کنید.</p> : null}
-          </fieldset>
-
-          <div className="form-actions">
-            <button type="submit" className="button primary" disabled={busy === "save-section"}>
-              ذخیره بخش
-            </button>
-          </div>
-        </form>
-      ) : null}
-    </section>
-  );
-}
-
-function ProductManager({ products, categories, token, onReload, onStatus }) {
-  const [selectedId, setSelectedId] = useState("");
+function ProductListPage() {
+  const { products, categories, token, loadData, setStatus, navigate } = useAdminData();
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const [form, setForm] = useState(() => newProductForm(categories));
-  const [images, setImages] = useState([]);
   const [busy, setBusy] = useState("");
-  const [isFormOpen, setIsFormOpen] = useState(false);
 
-  const selectedProduct = selectedId ? products.find((product) => product.id === selectedId) : null;
   const visibleProducts = useMemo(() => {
     if (categoryFilter === "all") return products;
     return products.filter((product) => product.term === categoryFilter);
   }, [categoryFilter, products]);
-  const imageById = useMemo(() => new Map(images.map((image) => [image.id, image])), [images]);
 
-  useEffect(() => {
-    if (!selectedId) {
-      setImages([]);
-      return undefined;
-    }
-
-    let isActive = true;
-
-    apiRequest(`admin/courses/${selectedId}/images`, { token })
-      .then((data) => {
-        if (isActive) setImages(data.images || []);
-      })
-      .catch((error) => onStatus({ type: "error", message: error.message }));
-
-    return () => {
-      isActive = false;
-    };
-  }, [selectedId, token, onStatus]);
-
-  useEffect(() => {
-    if (!selectedId || !selectedProduct) return;
-    setForm(productToForm(selectedProduct, categories));
-  }, [categories, selectedId, selectedProduct]);
-
-  useEffect(() => {
-    if (selectedId || form.category || !categories.length) return;
-    setForm((current) => ({ ...current, category: defaultCategorySlug(categories) }));
-  }, [categories, form.category, selectedId]);
-
-  const updateField = (field) => (event) => {
-    setForm((current) => ({ ...current, [field]: event.target.value }));
-  };
-
-  const updateList = (field, index, value) => {
-    setForm((current) => ({
-      ...current,
-      [field]: current[field].map((item, itemIndex) => (itemIndex === index ? value : item)),
-    }));
-  };
-
-  const refreshImages = async (productId) => {
-    const data = await apiRequest(`admin/courses/${productId}/images`, { token });
-    setImages(data.images || []);
-    return data.images || [];
-  };
-
-  const persistProduct = async (nextForm) => {
-    if (!selectedId) return;
-    await apiRequest(`admin/courses/${selectedId}`, {
-      method: "PUT",
-      token,
-      headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(productFromForm(nextForm, categories)),
-    });
-    await onReload();
-  };
-
-  const uploadImages = async (files, busyKey) => {
-    if (!selectedId) {
-      onStatus({ type: "error", message: "ابتدا محصول را ذخیره کنید." });
-      return [];
-    }
-
-    setBusy(busyKey);
+  const handleDelete = async (product) => {
+    if (!window.confirm(`محصول «${product.title || product.id}» حذف شود؟`)) return;
+    setBusy(`delete-${product.id}`);
     try {
-      const formData = new FormData();
-      Array.from(files).forEach((file) => formData.append("images", file));
-      const data = await apiRequest(`admin/courses/${selectedId}/images`, {
-        method: "POST",
-        token,
-        body: formData,
-      });
-      await refreshImages(selectedId);
-      return data.images || [];
+      await apiRequest(`admin/courses/${encodeURIComponent(product.id)}`, { method: "DELETE", token });
+      await loadData();
+      setStatus({ type: "success", message: "محصول حذف شد." });
     } catch (error) {
-      onStatus({ type: "error", message: error.message });
-      return [];
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const handleMainImageChange = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const uploaded = await uploadImages([file], "main-image");
-    const image = uploaded[0];
-    if (!image) return;
-
-    const nextForm = { ...form, imageId: image.id };
-    setForm(nextForm);
-    await persistProduct(nextForm);
-    onStatus({ type: "success", message: "تصویر اصلی محصول ذخیره شد." });
-  };
-
-  const handleGalleryUpload = async (files) => {
-    const uploaded = await uploadImages(files, "gallery");
-    if (uploaded.length) onStatus({ type: "success", message: "تصاویر گالری ذخیره شدند." });
-  };
-
-  const handlePickMain = async (imageId) => {
-    const nextForm = { ...form, imageId };
-    setForm(nextForm);
-    await persistProduct(nextForm);
-    onStatus({ type: "success", message: "تصویر اصلی تغییر کرد." });
-  };
-
-  const handleDeleteImage = async (imageId) => {
-    if (!selectedId || !window.confirm("این تصویر حذف شود؟")) return;
-    setBusy(`image-${imageId}`);
-
-    try {
-      await apiRequest(`admin/courses/${selectedId}/images/${imageId}`, { method: "DELETE", token });
-      const nextForm = { ...form, imageId: form.imageId === imageId ? "" : form.imageId };
-      setForm(nextForm);
-      await persistProduct(nextForm);
-      await refreshImages(selectedId);
-      onStatus({ type: "success", message: "تصویر حذف شد." });
-    } catch (error) {
-      onStatus({ type: "error", message: error.message });
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const handleSave = async (event) => {
-    event.preventDefault();
-    setBusy("save");
-
-    try {
-      const payload = productFromForm(form, categories);
-      const data = selectedId
-        ? await apiRequest(`admin/courses/${selectedId}`, {
-            method: "PUT",
-            token,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          })
-        : await apiRequest("admin/courses", {
-            method: "POST",
-            token,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-
-      const saved = data.course;
-      setSelectedId(saved.id);
-      setForm(productToForm(saved, categories));
-      setIsFormOpen(true);
-      await onReload();
-      onStatus({ type: "success", message: "محصول ذخیره شد." });
-    } catch (error) {
-      onStatus({ type: "error", message: error.message });
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const handleNew = () => {
-    setSelectedId("");
-    setImages([]);
-    setForm(newProductForm(categories));
-    setIsFormOpen(true);
-  };
-
-  const handleEdit = (product) => {
-    setSelectedId(product.id);
-    setForm(productToForm(product, categories));
-    setIsFormOpen(true);
-  };
-
-  const handleCancel = () => {
-    setSelectedId("");
-    setImages([]);
-    setForm(newProductForm(categories));
-    setIsFormOpen(false);
-  };
-
-  const handleDelete = async (productId = selectedId) => {
-    if (!productId || !window.confirm("این محصول حذف شود؟")) return;
-    setBusy(`delete-${productId}`);
-
-    try {
-      await apiRequest(`admin/courses/${productId}`, { method: "DELETE", token });
-      if (productId === selectedId) handleCancel();
-      await onReload();
-      onStatus({ type: "success", message: "محصول حذف شد." });
-    } catch (error) {
-      onStatus({ type: "error", message: error.message });
+      setStatus({ type: "error", message: error.message });
     } finally {
       setBusy("");
     }
@@ -930,15 +488,15 @@ function ProductManager({ products, categories, token, onReload, onStatus }) {
 
   return (
     <section className="panel-section">
-      <div className="section-header">
-        <div>
-          <p className="eyebrow">PRODUCTS</p>
-          <h2>محصولات</h2>
-        </div>
-        <button type="button" className="button primary" onClick={handleNew} disabled={!categories.length}>
-          محصول جدید
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="PRODUCTS"
+        title="محصولات"
+        action={
+          <button type="button" className="button primary" onClick={() => navigate("/products/new")} disabled={!categories.length}>
+            محصول جدید
+          </button>
+        }
+      />
 
       <div className="category-tabs" role="tablist" aria-label="فیلتر دسته‌بندی">
         <button type="button" className={categoryFilter === "all" ? "is-active" : ""} onClick={() => setCategoryFilter("all")}>
@@ -963,142 +521,807 @@ function ProductManager({ products, categories, token, onReload, onStatus }) {
               key={product.id}
               product={product}
               categories={categories}
-              onEdit={handleEdit}
               onDelete={handleDelete}
               busy={busy === `delete-${product.id}`}
             />
           ))
         ) : (
-          <p className="empty-state">{categories.length ? "در این دسته‌بندی هنوز محصولی ثبت نشده است." : "ابتدا یک دسته‌بندی بسازید."}</p>
+          <p className="empty-state">{categories.length ? "در این دسته‌بندی هنوز محصولی ثبت نشده است." : "دسته‌بندی موجود نیست."}</p>
         )}
       </div>
+    </section>
+  );
+}
 
-      {isFormOpen ? (
-        <form className="admin-form product-form" onSubmit={handleSave}>
-          <div className="form-title-row">
-            <h3>{selectedProduct ? `ویرایش ${selectedProduct.title}` : "محصول جدید"}</h3>
-            <button type="button" className="button ghost" onClick={handleCancel}>
-              بستن فرم
+function ProductEditorPage({ productId, isNew }) {
+  const { products, categories, token, loadData, setStatus, status, navigate } = useAdminData();
+  const selectedProduct = productId ? products.find((product) => product.id === productId) : null;
+  const [form, setForm] = useState(() => (isNew ? newProductForm(categories) : productToForm(selectedProduct, categories)));
+  const [images, setImages] = useState([]);
+  const [busy, setBusy] = useState("");
+  const imageById = useMemo(() => new Map(images.map((image) => [image.id, image])), [images]);
+
+  useEffect(() => {
+    if (isNew) {
+      setForm((current) => ({
+        ...current,
+        category: current.category || defaultCategorySlug(categories),
+      }));
+      return;
+    }
+    if (selectedProduct) setForm(productToForm(selectedProduct, categories));
+  }, [categories, isNew, selectedProduct]);
+
+  useEffect(() => {
+    if (!productId || isNew) {
+      setImages([]);
+      return undefined;
+    }
+
+    let isActive = true;
+    apiRequest(`admin/courses/${encodeURIComponent(productId)}/images`, { token })
+      .then((data) => {
+        if (isActive) setImages(data.images || []);
+      })
+      .catch((error) => setStatus({ type: "error", message: error.message }));
+
+    return () => {
+      isActive = false;
+    };
+  }, [isNew, productId, setStatus, token]);
+
+  if (!isNew && !selectedProduct && status.type !== "loading") {
+    return <NotFoundPanel title="محصول پیدا نشد" backTo="/products" backLabel="بازگشت به محصولات" />;
+  }
+
+  const updateField = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
+  const updateList = (field, index, value) => {
+    setForm((current) => {
+      const items = current[field]?.length ? current[field] : [""];
+      return { ...current, [field]: items.map((item, itemIndex) => (itemIndex === index ? value : item)) };
+    });
+  };
+
+  const refreshImages = async () => {
+    if (!productId) return [];
+    const data = await apiRequest(`admin/courses/${encodeURIComponent(productId)}/images`, { token });
+    setImages(data.images || []);
+    return data.images || [];
+  };
+
+  const persistProduct = async (nextForm) => {
+    if (!productId || isNew) return;
+    await apiRequest(`admin/courses/${encodeURIComponent(productId)}`, {
+      method: "PUT",
+      token,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(productFromForm(nextForm, categories)),
+    });
+    await loadData();
+  };
+
+  const uploadImages = async (files, busyKey) => {
+    if (!productId || isNew) {
+      setStatus({ type: "error", message: "آپلود تصویر پس از ذخیره محصول فعال می‌شود." });
+      return [];
+    }
+
+    setBusy(busyKey);
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach((file) => formData.append("images", file));
+      const data = await apiRequest(`admin/courses/${encodeURIComponent(productId)}/images`, {
+        method: "POST",
+        token,
+        body: formData,
+      });
+      await refreshImages();
+      return data.images || [];
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+      return [];
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleMainImageChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const uploaded = await uploadImages([file], "main-image");
+    const image = uploaded[0];
+    if (!image) return;
+
+    const nextForm = { ...form, imageId: image.id };
+    setForm(nextForm);
+    await persistProduct(nextForm);
+    setStatus({ type: "success", message: "تصویر اصلی محصول ذخیره شد." });
+  };
+
+  const handleGalleryUpload = async (files) => {
+    const uploaded = await uploadImages(files, "gallery");
+    if (uploaded.length) setStatus({ type: "success", message: "تصاویر گالری ذخیره شدند." });
+  };
+
+  const handlePickMain = async (imageId) => {
+    const nextForm = { ...form, imageId };
+    setForm(nextForm);
+    await persistProduct(nextForm);
+    setStatus({ type: "success", message: "تصویر اصلی تغییر کرد." });
+  };
+
+  const handleDeleteImage = async (image) => {
+    if (!productId || !window.confirm(`تصویر «${image.filename || image.id}» حذف شود؟`)) return;
+    setBusy(`image-${image.id}`);
+
+    try {
+      await apiRequest(`admin/courses/${encodeURIComponent(productId)}/images/${encodeURIComponent(image.id)}`, { method: "DELETE", token });
+      const nextForm = { ...form, imageId: form.imageId === image.id ? "" : form.imageId };
+      setForm(nextForm);
+      await persistProduct(nextForm);
+      await refreshImages();
+      setStatus({ type: "success", message: "تصویر حذف شد." });
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!productId || !selectedProduct || !window.confirm(`محصول «${selectedProduct.title || productId}» حذف شود؟`)) return;
+    setBusy("delete-product");
+    try {
+      await apiRequest(`admin/courses/${encodeURIComponent(productId)}`, { method: "DELETE", token });
+      await loadData();
+      setStatus({ type: "success", message: "محصول حذف شد." });
+      navigate("/products");
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleSave = async (event) => {
+    event.preventDefault();
+    setBusy("save-product");
+
+    try {
+      const payload = productFromForm(form, categories);
+      await apiRequest(isNew ? "admin/courses" : `admin/courses/${encodeURIComponent(productId)}`, {
+        method: isNew ? "POST" : "PUT",
+        token,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      await loadData();
+      setStatus({ type: "success", message: "محصول ذخیره شد." });
+      navigate("/products");
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setBusy("");
+    }
+  };
+
+  return (
+    <section className="panel-section">
+      <PageHeader
+        eyebrow="PRODUCT"
+        title={isNew ? "محصول جدید" : `ویرایش ${selectedProduct?.title || productId}`}
+        action={<AdminLink to="/products" className="button secondary">بازگشت به لیست</AdminLink>}
+      />
+
+      <form className="admin-form entity-form" onSubmit={handleSave}>
+        <div className="form-grid">
+          <label>
+            عنوان محصول
+            <input value={form.title} onChange={updateField("title")} required />
+          </label>
+          <label>
+            اسلاگ
+            <input value={form.slug} onChange={updateField("slug")} dir="ltr" required />
+          </label>
+          <label>
+            دسته‌بندی
+            <select value={form.category} onChange={updateField("category")} required>
+              {categories.map((category) => (
+                <option key={category.slug} value={category.slug}>{category.title}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            جنس پارچه
+            <input value={form.fabrics[0] || ""} onChange={(event) => updateList("fabrics", 0, event.target.value)} placeholder="مثلاً ساتن" required />
+          </label>
+          <label>
+            رنگ پارچه
+            <input value={form.colors[0] || ""} onChange={(event) => updateList("colors", 0, event.target.value)} placeholder="مثلاً مشکی" required />
+          </label>
+          <label>
+            ترتیب
+            <input value={form.sortOrder} onChange={updateField("sortOrder")} type="number" />
+          </label>
+          <label>
+            وضعیت
+            <select value={form.status} onChange={updateField("status")}>
+              <option value="in_progress">فعال</option>
+              <option value="draft">پیش‌نویس</option>
+            </select>
+          </label>
+        </div>
+
+        <ProductImagePanel
+          selectedId={isNew ? "" : productId}
+          form={form}
+          images={images}
+          imageById={imageById}
+          busy={busy}
+          onUploadMain={handleMainImageChange}
+          onUploadGallery={handleGalleryUpload}
+          onPickMain={handlePickMain}
+          onDeleteImage={handleDeleteImage}
+        />
+
+        <div className="form-actions sticky-actions">
+          <button type="submit" className="button primary" disabled={busy === "save-product"}>
+            {busy === "save-product" ? "در حال ذخیره..." : "ذخیره و بازگشت"}
+          </button>
+          {!isNew ? (
+            <button type="button" className="button ghost danger" onClick={handleDelete} disabled={busy === "delete-product"}>
+              حذف محصول
             </button>
-          </div>
+          ) : null}
+        </div>
+      </form>
+    </section>
+  );
+}
 
-          <div className="form-grid">
-            <label>
-              عنوان محصول
-              <input value={form.title} onChange={updateField("title")} required />
-            </label>
-            <label>
-              دسته‌بندی
-              <select value={form.category} onChange={updateField("category")} required>
-                {categories.map((category) => (
-                  <option key={category.slug} value={category.slug}>{category.title}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              جنس پارچه
-              <input value={form.fabrics[0] || ""} onChange={(event) => updateList("fabrics", 0, event.target.value)} placeholder="مثلاً ساتن" required />
-            </label>
-            <label>
-              رنگ پارچه
-              <input value={form.colors[0] || ""} onChange={(event) => updateList("colors", 0, event.target.value)} placeholder="مثلاً مشکی" required />
-            </label>
-          </div>
+function CategoryListPage() {
+  const { categories, token, loadData, setStatus, navigate } = useAdminData();
+  const [busy, setBusy] = useState("");
 
-          <ProductImagePanel
-            selectedId={selectedId}
-            form={form}
-            images={images}
-            imageById={imageById}
-            busy={busy}
-            onUploadMain={handleMainImageChange}
-            onUploadGallery={handleGalleryUpload}
-            onPickMain={handlePickMain}
-            onDeleteImage={handleDeleteImage}
-          />
+  const handleDelete = async (category) => {
+    if (!window.confirm(`دسته‌بندی «${category.title || category.slug}» حذف شود؟`)) return;
+    setBusy(`delete-category-${category.slug}`);
+    try {
+      await apiRequest(`admin/categories/${encodeURIComponent(category.slug)}`, { method: "DELETE", token });
+      await loadData();
+      setStatus({ type: "success", message: "دسته‌بندی حذف شد." });
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setBusy("");
+    }
+  };
 
+  return (
+    <section className="panel-section">
+      <PageHeader
+        eyebrow="CATEGORIES"
+        title="دسته‌بندی‌ها"
+        action={<button type="button" className="button primary" onClick={() => navigate("/categories/new")}>دسته‌بندی جدید</button>}
+      />
+      <div className="management-list">
+        {categories.length ? categories.map((category) => (
+          <article key={category.slug} className="management-card">
+            <div className="card-copy">
+              <h3>{category.title}</h3>
+              <p dir="ltr">{category.slug}</p>
+              <p>{category.subtitle || "بدون توضیح"}</p>
+              <div className="meta-row">
+                <span>{statusLabel(category.status)}</span>
+                <span>ترتیب {category.sortOrder || 0}</span>
+              </div>
+            </div>
+            <div className="product-actions">
+              <AdminLink to={`/categories/${encodeURIComponent(category.slug)}/edit`} className="button secondary">ویرایش</AdminLink>
+              <button
+                type="button"
+                className="button ghost danger"
+                onClick={() => handleDelete(category)}
+                disabled={busy === `delete-category-${category.slug}`}
+              >
+                حذف
+              </button>
+            </div>
+          </article>
+        )) : <p className="empty-state">هنوز دسته‌بندی ثبت نشده است.</p>}
+      </div>
+    </section>
+  );
+}
+
+function CategoryEditorPage({ slug, isNew }) {
+  const { categories, token, loadData, setStatus, status, navigate } = useAdminData();
+  const selectedCategory = slug ? categories.find((category) => category.slug === slug) : null;
+  const [form, setForm] = useState(() => (isNew ? emptyCategoryForm : categoryToForm(selectedCategory)));
+  const [busy, setBusy] = useState("");
+
+  useEffect(() => {
+    if (isNew) return;
+    if (selectedCategory) setForm(categoryToForm(selectedCategory));
+  }, [isNew, selectedCategory]);
+
+  if (!isNew && !selectedCategory && status.type !== "loading") {
+    return <NotFoundPanel title="دسته‌بندی پیدا نشد" backTo="/categories" backLabel="بازگشت به دسته‌بندی‌ها" />;
+  }
+
+  const updateField = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
+
+  const handleSave = async (event) => {
+    event.preventDefault();
+    setBusy("save-category");
+    try {
+      const payload = categoryFromForm(form);
+      await apiRequest(isNew ? "admin/categories" : `admin/categories/${encodeURIComponent(slug)}`, {
+        method: isNew ? "POST" : "PUT",
+        token,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      await loadData();
+      setStatus({ type: "success", message: "دسته‌بندی ذخیره شد." });
+      navigate("/categories");
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!slug || !selectedCategory || !window.confirm(`دسته‌بندی «${selectedCategory.title || slug}» حذف شود؟`)) return;
+    setBusy("delete-category");
+    try {
+      await apiRequest(`admin/categories/${encodeURIComponent(slug)}`, { method: "DELETE", token });
+      await loadData();
+      setStatus({ type: "success", message: "دسته‌بندی حذف شد." });
+      navigate("/categories");
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setBusy("");
+    }
+  };
+
+  return (
+    <section className="panel-section">
+      <PageHeader
+        eyebrow="CATEGORY"
+        title={isNew ? "دسته‌بندی جدید" : `ویرایش ${selectedCategory?.title || slug}`}
+        action={<AdminLink to="/categories" className="button secondary">بازگشت به لیست</AdminLink>}
+      />
+      <form className="admin-form entity-form" onSubmit={handleSave}>
+        <div className="form-grid">
+          <label>
+            نام
+            <input value={form.title} onChange={updateField("title")} required />
+          </label>
+          <label>
+            اسلاگ
+            <input value={form.slug} onChange={updateField("slug")} dir="ltr" required />
+          </label>
+          <label>
+            ترتیب
+            <input value={form.sortOrder} onChange={updateField("sortOrder")} type="number" />
+          </label>
+          <label>
+            وضعیت
+            <select value={form.status} onChange={updateField("status")}>
+              <option value="active">فعال</option>
+              <option value="draft">پیش‌نویس</option>
+            </select>
+          </label>
+          <label className="full-field">
+            توضیح کوتاه
+            <input value={form.subtitle} onChange={updateField("subtitle")} />
+          </label>
+        </div>
+        <div className="form-actions sticky-actions">
+          <button type="submit" className="button primary" disabled={busy === "save-category"}>
+            ذخیره و بازگشت
+          </button>
+          {!isNew ? (
+            <button type="button" className="button ghost danger" onClick={handleDelete} disabled={busy === "delete-category"}>
+              حذف دسته‌بندی
+            </button>
+          ) : null}
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function HomepageSectionListPage() {
+  const { homepageSections, token, loadData, setStatus, navigate } = useAdminData();
+  const [busy, setBusy] = useState("");
+
+  const handleDelete = async (section) => {
+    if (!window.confirm(`بخش «${section.title || section.id}» حذف شود؟`)) return;
+    setBusy(`delete-section-${section.id}`);
+    try {
+      await apiRequest(`admin/homepage-sections/${encodeURIComponent(section.id)}`, { method: "DELETE", token });
+      await loadData();
+      setStatus({ type: "success", message: "بخش صفحه اصلی حذف شد." });
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setBusy("");
+    }
+  };
+
+  return (
+    <section className="panel-section">
+      <PageHeader
+        eyebrow="HOMEPAGE"
+        title="بخش‌های صفحه اصلی"
+        action={<button type="button" className="button primary" onClick={() => navigate("/homepage-sections/new")}>بخش جدید</button>}
+      />
+      <div className="management-list">
+        {homepageSections.length ? homepageSections.map((section) => (
+          <article key={section.id} className="management-card with-thumb">
+            <div className="section-thumb">
+              {section.imageUrl ? <img src={section.imageUrl} alt={section.alt || section.title} loading="lazy" /> : <span>بدون تصویر</span>}
+            </div>
+            <div className="card-copy">
+              <h3>{section.title}</h3>
+              <p dir="ltr">{section.id}</p>
+              <p>{section.ctaLabel || "بدون دکمه"} · {section.to || "بدون لینک"}</p>
+              <div className="meta-row">
+                <span>{statusLabel(section.status)}</span>
+                <span>ترتیب {section.sortOrder || 0}</span>
+              </div>
+            </div>
+            <div className="product-actions">
+              <AdminLink to={`/homepage-sections/${encodeURIComponent(section.id)}/edit`} className="button secondary">ویرایش</AdminLink>
+              <button
+                type="button"
+                className="button ghost danger"
+                onClick={() => handleDelete(section)}
+                disabled={busy === `delete-section-${section.id}`}
+              >
+                حذف
+              </button>
+            </div>
+          </article>
+        )) : <p className="empty-state">هنوز بخشی برای صفحه اصلی ثبت نشده است.</p>}
+      </div>
+    </section>
+  );
+}
+
+function HomepageSectionEditorPage({ sectionId, isNew }) {
+  const { homepageSections, token, loadData, setStatus, status, navigate } = useAdminData();
+  const selectedSection = sectionId ? homepageSections.find((section) => section.id === sectionId) : null;
+  const [form, setForm] = useState(() => {
+    if (!isNew) return sectionToForm(selectedSection);
+    return { ...emptySectionForm, id: `section-${Date.now()}` };
+  });
+  const [busy, setBusy] = useState("");
+
+  useEffect(() => {
+    if (isNew) return;
+    if (selectedSection) setForm(sectionToForm(selectedSection));
+  }, [isNew, selectedSection]);
+
+  if (!isNew && !selectedSection && status.type !== "loading") {
+    return <NotFoundPanel title="بخش صفحه اصلی پیدا نشد" backTo="/homepage-sections" backLabel="بازگشت به صفحه اصلی" />;
+  }
+
+  const updateField = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
+
+  const handleSave = async (event) => {
+    event.preventDefault();
+    setBusy("save-section");
+    try {
+      const payload = sectionFromForm(form);
+      await apiRequest(isNew ? "admin/homepage-sections" : `admin/homepage-sections/${encodeURIComponent(sectionId)}`, {
+        method: isNew ? "POST" : "PUT",
+        token,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      await loadData();
+      setStatus({ type: "success", message: "بخش صفحه اصلی ذخیره شد." });
+      navigate("/homepage-sections");
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file || !sectionId || isNew) {
+      if (file) setStatus({ type: "error", message: "آپلود تصویر پس از ذخیره بخش فعال می‌شود." });
+      return;
+    }
+    setBusy("section-image");
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      await apiRequest(`admin/homepage-sections/${encodeURIComponent(sectionId)}/image`, {
+        method: "POST",
+        token,
+        body: formData,
+      });
+      await loadData();
+      setStatus({ type: "success", message: "تصویر بخش ذخیره شد." });
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setBusy("");
+      event.target.value = "";
+    }
+  };
+
+  const handleImageDelete = async () => {
+    if (!sectionId || !selectedSection || !window.confirm(`تصویر بخش «${selectedSection.title || sectionId}» حذف شود؟`)) return;
+    setBusy("section-image-delete");
+    try {
+      await apiRequest(`admin/homepage-sections/${encodeURIComponent(sectionId)}/image`, {
+        method: "DELETE",
+        token,
+      });
+      await loadData();
+      setStatus({ type: "success", message: "تصویر بخش حذف شد." });
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!sectionId || !selectedSection || !window.confirm(`بخش «${selectedSection.title || sectionId}» حذف شود؟`)) return;
+    setBusy("delete-section");
+    try {
+      await apiRequest(`admin/homepage-sections/${encodeURIComponent(sectionId)}`, { method: "DELETE", token });
+      await loadData();
+      setStatus({ type: "success", message: "بخش صفحه اصلی حذف شد." });
+      navigate("/homepage-sections");
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setBusy("");
+    }
+  };
+
+  return (
+    <section className="panel-section">
+      <PageHeader
+        eyebrow="HOMEPAGE SECTION"
+        title={isNew ? "بخش جدید" : `ویرایش ${selectedSection?.title || sectionId}`}
+        action={<AdminLink to="/homepage-sections" className="button secondary">بازگشت به لیست</AdminLink>}
+      />
+      <form className="admin-form entity-form" onSubmit={handleSave}>
+        <div className="form-grid">
+          <label>
+            شناسه
+            <input value={form.id} onChange={updateField("id")} dir="ltr" required disabled={!isNew} />
+          </label>
+          <label>
+            عنوان
+            <input value={form.title} onChange={updateField("title")} required />
+          </label>
+          <label className="full-field">
+            توضیح کوتاه
+            <textarea value={form.subtitle} onChange={updateField("subtitle")} rows={3} />
+          </label>
+          <label>
+            برچسب کوچک
+            <input value={form.eyebrow} onChange={updateField("eyebrow")} />
+          </label>
+          <label>
+            متن دکمه
+            <input value={form.ctaLabel} onChange={updateField("ctaLabel")} />
+          </label>
+          <label>
+            لینک
+            <input value={form.to} onChange={updateField("to")} dir="ltr" required />
+          </label>
+          <label>
+            متن جایگزین تصویر
+            <input value={form.alt} onChange={updateField("alt")} />
+          </label>
+          <label>
+            ترتیب
+            <input value={form.sortOrder} onChange={updateField("sortOrder")} type="number" />
+          </label>
+          <label>
+            وضعیت
+            <select value={form.status} onChange={updateField("status")}>
+              <option value="active">فعال</option>
+              <option value="draft">پیش‌نویس</option>
+            </select>
+          </label>
+          <label>
+            کلاس تصویر
+            <input value={form.imageClassName} onChange={updateField("imageClassName")} dir="ltr" />
+          </label>
+        </div>
+
+        <fieldset className="image-panel">
+          <legend>تصویر بخش</legend>
+          {selectedSection?.imageUrl ? <img className="main-preview" src={selectedSection.imageUrl} alt={selectedSection.alt || selectedSection.title} /> : null}
           <div className="form-actions">
-            <button type="submit" className="button primary" disabled={busy === "save"}>
-              {busy === "save" ? "در حال ذخیره..." : "ذخیره محصول"}
-            </button>
-            {selectedId ? (
-              <button type="button" className="button ghost danger" onClick={() => handleDelete()} disabled={busy === `delete-${selectedId}`}>
-                حذف محصول
+            <label className="button secondary file-button">
+              آپلود تصویر
+              <input type="file" accept="image/*" onChange={handleImageUpload} disabled={isNew || busy === "section-image"} />
+            </label>
+            {selectedSection?.imageUrl ? (
+              <button type="button" className="button ghost danger" onClick={handleImageDelete} disabled={busy === "section-image-delete"}>
+                حذف تصویر
               </button>
             ) : null}
           </div>
-        </form>
-      ) : null}
+          {isNew ? <p className="hint">آپلود تصویر پس از ذخیره بخش فعال می‌شود.</p> : null}
+        </fieldset>
+
+        <div className="form-actions sticky-actions">
+          <button type="submit" className="button primary" disabled={busy === "save-section"}>
+            ذخیره و بازگشت
+          </button>
+          {!isNew ? (
+            <button type="button" className="button ghost danger" onClick={handleDelete} disabled={busy === "delete-section"}>
+              حذف بخش
+            </button>
+          ) : null}
+        </div>
+      </form>
     </section>
   );
 }
 
-function ContactRequestsTable({ requests, onDelete, deletingId }) {
+function ContactRequestsPage() {
+  const { contactRequests, token, loadData, setStatus } = useAdminData();
+  const [deleting, setDeleting] = useState("");
+
+  const deleteContactRequest = async (request) => {
+    if (!window.confirm(`پیام «${request.fullName || request.contact}» حذف شود؟`)) return;
+
+    setDeleting(request.id);
+    try {
+      await apiRequest(`admin/contact-requests/${encodeURIComponent(request.id)}`, { method: "DELETE", token });
+      await loadData();
+      setStatus({ type: "success", message: "پیام حذف شد." });
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setDeleting("");
+    }
+  };
+
   return (
     <section className="panel-section">
-      <div className="section-header">
-        <div>
-          <p className="eyebrow">REQUESTS</p>
-          <h2>پیام‌ها و درخواست‌ها</h2>
-        </div>
-      </div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>نام</th>
-              <th>شماره</th>
-              <th>پیام</th>
-              <th>تاریخ</th>
-              <th>عملیات</th>
-            </tr>
-          </thead>
-          <tbody>
-            {requests.length ? (
-              requests.map((request) => (
-                <tr key={request.id}>
-                  <td>{request.fullName}</td>
-                  <td dir="ltr">{request.contact}</td>
-                  <td>{request.message}</td>
-                  <td>{formatDate(request.createdAt)}</td>
-                  <td>
-                    <button type="button" className="button ghost danger" onClick={() => onDelete(request.id)} disabled={deletingId === request.id}>
-                      {deletingId === request.id ? "در حال حذف..." : "حذف"}
-                    </button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={5}>هنوز پیامی ثبت نشده است.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <PageHeader
+        eyebrow="REQUESTS"
+        title="پیام‌ها و درخواست‌ها"
+      />
+      <div className="message-list">
+        {contactRequests.length ? contactRequests.map((request) => (
+          <article key={request.id} className="message-card">
+            <div className="card-copy">
+              <h3>{request.fullName || "بدون نام"}</h3>
+              <p dir="ltr">{request.contact}</p>
+              <p>{truncateText(request.message, 180)}</p>
+              <div className="meta-row">
+                <span>{formatDate(request.createdAt)}</span>
+              </div>
+            </div>
+            <div className="product-actions">
+              <button type="button" className="button ghost danger" onClick={() => deleteContactRequest(request)} disabled={deleting === request.id}>
+                {deleting === request.id ? "در حال حذف..." : "حذف"}
+              </button>
+            </div>
+          </article>
+        )) : <p className="empty-state">هنوز پیامی ثبت نشده است.</p>}
       </div>
     </section>
   );
+}
+
+function SettingsPage({ onLogout }) {
+  const { products, categories, homepageSections, contactRequests, loadData, status } = useAdminData();
+  const isLoading = status.type === "loading";
+
+  return (
+    <section className="panel-section">
+      <PageHeader
+        eyebrow="SETTINGS"
+        title="تنظیمات"
+      />
+      <div className="settings-grid">
+        <article className="settings-card">
+          <h3>وضعیت session</h3>
+          <p>Session فعال است.</p>
+          <div className="form-actions">
+            <button type="button" className="button secondary" onClick={loadData} disabled={isLoading}>
+              {isLoading ? "در حال دریافت..." : "به‌روزرسانی داده‌ها"}
+            </button>
+            <button type="button" className="button ghost" onClick={onLogout}>
+              خروج
+            </button>
+          </div>
+        </article>
+        <article className="settings-card">
+          <h3>خلاصه محتوا</h3>
+          <p>{products.length} محصول، {categories.length} دسته‌بندی، {homepageSections.length} بخش صفحه اصلی، {contactRequests.length} پیام.</p>
+        </article>
+        <article className="settings-card">
+          <h3>سایت عمومی</h3>
+          <p>لینک سایت عمومی</p>
+          <a href="/" target="_blank" rel="noreferrer" className="button primary">باز کردن سایت</a>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function AdminNavigation() {
+  const { path } = useAdminData();
+  const activeSection = parseRoute(path).section;
+
+  return (
+    <>
+      <nav className="admin-tabs" aria-label="بخش‌های پنل مدیریت">
+        {navItems.map((item) => (
+          <AdminLink key={item.key} to={item.to} className={activeSection === item.key ? "is-active" : ""}>
+            {item.label}
+          </AdminLink>
+        ))}
+      </nav>
+      <nav className="admin-bottom-nav" aria-label="منوی پایین پنل">
+        {navItems.map((item) => (
+          <AdminLink key={item.key} to={item.to} className={activeSection === item.key ? "is-active" : ""}>
+            <span>{item.shortLabel}</span>
+          </AdminLink>
+        ))}
+      </nav>
+    </>
+  );
+}
+
+function AdminContent({ route, onLogout }) {
+  if (route.section === "products" && route.view === "list") return <ProductListPage />;
+  if (route.section === "products" && route.view === "new") return <ProductEditorPage isNew />;
+  if (route.section === "products" && route.view === "edit") return <ProductEditorPage productId={route.id} />;
+
+  if (route.section === "categories" && route.view === "list") return <CategoryListPage />;
+  if (route.section === "categories" && route.view === "new") return <CategoryEditorPage isNew />;
+  if (route.section === "categories" && route.view === "edit") return <CategoryEditorPage slug={route.slug} />;
+
+  if (route.section === "homepage-sections" && route.view === "list") return <HomepageSectionListPage />;
+  if (route.section === "homepage-sections" && route.view === "new") return <HomepageSectionEditorPage isNew />;
+  if (route.section === "homepage-sections" && route.view === "edit") return <HomepageSectionEditorPage sectionId={route.id} />;
+
+  if (route.section === "contact-requests") return <ContactRequestsPage />;
+  if (route.section === "settings") return <SettingsPage onLogout={onLogout} />;
+
+  return <NotFoundPanel title="صفحه پیدا نشد" backTo="/products" backLabel="بازگشت به محصولات" />;
 }
 
 function Dashboard({ token, onLogout }) {
+  const { path, route, navigate } = useAdminRouter();
   const [contactRequests, setContactRequests] = useState([]);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [homepageSections, setHomepageSections] = useState([]);
   const [status, setStatus] = useState({ type: "loading", message: "" });
-  const [deleting, setDeleting] = useState("");
 
-  const headers = useMemo(() => ({ token }), [token]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setStatus({ type: "loading", message: "در حال دریافت اطلاعات..." });
 
     try {
       const [contactsData, productsData, categoriesData, sectionsData] = await Promise.all([
-        apiRequest("admin/contact-requests", headers),
-        apiRequest("admin/courses", headers),
-        apiRequest("admin/categories", headers),
-        apiRequest("admin/homepage-sections", headers),
+        apiRequest("admin/contact-requests", { token }),
+        apiRequest("admin/courses", { token }),
+        apiRequest("admin/categories", { token }),
+        apiRequest("admin/homepage-sections", { token }),
       ]);
 
       setContactRequests(contactsData.contactRequests || []);
@@ -1110,58 +1333,63 @@ function Dashboard({ token, onLogout }) {
       setStatus({ type: "error", message: error.message });
       if (error.message.includes("ادمین")) onLogout();
     }
-  };
+  }, [onLogout, token]);
+
+  useEffect(() => {
+    if (path === "/") navigate("/products", { replace: true });
+  }, [navigate, path]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
-  const deleteContactRequest = async (id) => {
-    if (!window.confirm("این پیام حذف شود؟")) return;
+  const contextValue = useMemo(() => ({
+    path,
+    route,
+    navigate,
+    token,
+    contactRequests,
+    products,
+    categories,
+    homepageSections,
+    status,
+    setStatus,
+    loadData,
+  }), [categories, contactRequests, homepageSections, loadData, navigate, path, products, route, status, token]);
 
-    setDeleting(id);
-    try {
-      await apiRequest(`admin/contact-requests/${id}`, { method: "DELETE", token });
-      await loadData();
-    } catch (error) {
-      setStatus({ type: "error", message: error.message });
-    } finally {
-      setDeleting("");
-    }
-  };
+  const isLoading = status.type === "loading";
 
   return (
-    <main className="admin-shell" dir="rtl">
-      <header className="admin-header">
-        <div>
-          <p className="eyebrow">RULLA ADMIN</p>
-          <h1>مدیریت محتوای سایت</h1>
-          <p>دسته‌بندی‌ها، محصولات، تصاویر و بخش‌های صفحه اصلی را از همین پنل مدیریت کنید.</p>
-        </div>
-        <div className="header-actions">
-          <button type="button" className="button secondary" onClick={loadData}>
-            به‌روزرسانی
-          </button>
-          <button type="button" className="button ghost" onClick={onLogout}>
-            خروج
-          </button>
-        </div>
-      </header>
+    <AdminContext.Provider value={contextValue}>
+      <main className="admin-shell" dir="rtl">
+        <header className="admin-header">
+          <div>
+            <p className="eyebrow">RULLA ADMIN</p>
+            <h1>مدیریت محتوای سایت</h1>
+          </div>
+          <div className="header-actions">
+            <button type="button" className="button secondary" onClick={loadData} disabled={isLoading}>
+              {isLoading ? "در حال دریافت..." : "به‌روزرسانی"}
+            </button>
+            <button type="button" className="button ghost" onClick={onLogout}>
+              خروج
+            </button>
+          </div>
+        </header>
 
-      <StatusMessage status={status} />
+        <AdminNavigation />
+        <StatusMessage status={status} />
 
-      <section className="stats-grid" aria-label="آمار">
-        <StatBox label="کل محصولات" value={products.length} />
-        <StatBox label="محصول فعال" value={products.filter((product) => product.status !== "draft").length} />
-        <StatBox label="دسته‌بندی" value={categories.length} />
-        <StatBox label="پیام دریافتی" value={contactRequests.length} />
-      </section>
+        <section className="stats-grid" aria-label="آمار">
+          <StatBox label="کل محصولات" value={products.length} />
+          <StatBox label="محصول فعال" value={products.filter((product) => product.status !== "draft").length} />
+          <StatBox label="دسته‌بندی" value={categories.length} />
+          <StatBox label="پیام دریافتی" value={contactRequests.length} />
+        </section>
 
-      <CategoryManager categories={categories} token={token} onReload={loadData} onStatus={setStatus} />
-      <ProductManager products={products} categories={categories} token={token} onReload={loadData} onStatus={setStatus} />
-      <LandingSectionManager sections={homepageSections} token={token} onReload={loadData} onStatus={setStatus} />
-      <ContactRequestsTable requests={contactRequests} deletingId={deleting} onDelete={deleteContactRequest} />
-    </main>
+        <AdminContent route={route} onLogout={onLogout} />
+      </main>
+    </AdminContext.Provider>
   );
 }
 
