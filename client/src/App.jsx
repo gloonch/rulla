@@ -65,7 +65,7 @@ const reviews = [
 const SCROLL_REVEAL_SELECTOR = [
   ".hero-image",
   ".hero-copy > *",
-  ".visual-section__content > *",
+  ".visual-section",
   ".process-editorial > *",
   ".section > *",
   ".page-main > *",
@@ -349,6 +349,7 @@ function useScrollReveal() {
         if (isVisible) {
           element.classList.add("is-visible");
           pendingRevealElements.delete(element);
+          intersectionObserver?.unobserve(element);
         }
       });
     };
@@ -358,9 +359,10 @@ function useScrollReveal() {
       revealRafId = window.requestAnimationFrame(revealVisibleElements);
     };
 
-    const intersectionObserver = reducedMotion
-      ? null
-      : new IntersectionObserver(
+    let revealTimeoutId = 0;
+    const canUseIntersectionObserver = !reducedMotion && "IntersectionObserver" in window;
+    const intersectionObserver = canUseIntersectionObserver
+      ? new IntersectionObserver(
         (entries, observer) => {
           entries.forEach((entry) => {
             if (!entry.isIntersecting) return;
@@ -373,7 +375,13 @@ function useScrollReveal() {
           rootMargin: "0px 0px -8% 0px",
           threshold: 0.08,
         },
-      );
+      )
+      : null;
+
+    const scheduleDelayedRevealVisibleElements = () => {
+      window.clearTimeout(revealTimeoutId);
+      revealTimeoutId = window.setTimeout(scheduleRevealVisibleElements, 180);
+    };
 
     const registerRevealElements = () => {
       const elements = [...root.querySelectorAll(SCROLL_REVEAL_SELECTOR)].filter((element) => {
@@ -411,6 +419,7 @@ function useScrollReveal() {
           });
           if (shouldRunReveal) {
             scheduleRevealVisibleElements();
+            scheduleDelayedRevealVisibleElements();
           }
         });
       });
@@ -419,13 +428,25 @@ function useScrollReveal() {
     const scheduleRegister = () => {
       window.cancelAnimationFrame(rafId);
       window.cancelAnimationFrame(secondRafId);
+      window.clearTimeout(revealTimeoutId);
       registerRevealElements();
+    };
+
+    const revealWhenVisible = () => {
+      if (!document.hidden) {
+        scheduleRevealVisibleElements();
+      }
     };
 
     registerRevealElements();
     window.addEventListener("scroll", scheduleRevealVisibleElements, { passive: true });
+    window.addEventListener("wheel", scheduleRevealVisibleElements, { passive: true });
+    window.addEventListener("touchmove", scheduleRevealVisibleElements, { passive: true });
+    window.addEventListener("touchend", scheduleRevealVisibleElements, { passive: true });
     window.addEventListener("resize", scheduleRevealVisibleElements);
     window.addEventListener("orientationchange", scheduleRevealVisibleElements);
+    window.addEventListener("pageshow", scheduleRevealVisibleElements);
+    document.addEventListener("visibilitychange", revealWhenVisible);
 
     const mutationObserver = new MutationObserver(scheduleRegister);
     mutationObserver.observe(root, { childList: true, subtree: true });
@@ -434,9 +455,15 @@ function useScrollReveal() {
       window.cancelAnimationFrame(rafId);
       window.cancelAnimationFrame(secondRafId);
       window.cancelAnimationFrame(revealRafId);
+      window.clearTimeout(revealTimeoutId);
       window.removeEventListener("scroll", scheduleRevealVisibleElements);
+      window.removeEventListener("wheel", scheduleRevealVisibleElements);
+      window.removeEventListener("touchmove", scheduleRevealVisibleElements);
+      window.removeEventListener("touchend", scheduleRevealVisibleElements);
       window.removeEventListener("resize", scheduleRevealVisibleElements);
       window.removeEventListener("orientationchange", scheduleRevealVisibleElements);
+      window.removeEventListener("pageshow", scheduleRevealVisibleElements);
+      document.removeEventListener("visibilitychange", revealWhenVisible);
       mutationObserver.disconnect();
       intersectionObserver?.disconnect();
     };
@@ -569,8 +596,8 @@ function SiteHeader() {
             RULLA
           </Link>
           <div className="header-contact-actions" aria-label="راه‌های ارتباط سریع">
-            <a href={`tel:${BUSINESS_PHONE}`} className="header-phone-link">
-              {BUSINESS_PHONE}
+            <a href={`tel:${BUSINESS_PHONE}`} className="header-phone-link" aria-label="تماس تلفنی">
+              <PhoneIcon />
             </a>
             <a href={WHATSAPP_URL} className="header-whatsapp-link" target="_blank" rel="noreferrer" aria-label="ارتباط در واتساپ">
               <WhatsAppIcon />
