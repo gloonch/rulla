@@ -830,6 +830,142 @@ p {
   line-height: 1.8;
 }
 
+.latest-products {
+  overflow: hidden;
+  padding: 56px 20px 64px;
+  background: #f7f5f1;
+}
+
+.latest-products__header {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 1120px);
+  margin: 0 auto 26px;
+  text-align: center;
+}
+
+.latest-products__header h2 {
+  font-size: 1.85rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.latest-products__shell {
+  position: relative;
+  width: min(100%, 1120px);
+  margin-inline: auto;
+}
+
+.latest-products__viewport {
+  overflow: hidden;
+}
+
+.latest-products__track {
+  display: flex;
+  width: 100%;
+  will-change: transform;
+  transition: transform 540ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.latest-products__slide {
+  flex: 0 0 50%;
+  min-width: 0;
+  padding-inline: 5px;
+  text-align: center;
+}
+
+.latest-products__image-link {
+  display: block;
+  overflow: hidden;
+  background: #ece9e3;
+}
+
+.latest-products__slide .garment-image {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  transition: transform 320ms ease;
+}
+
+.latest-products__slide:hover .garment-image {
+  transform: scale(1.02);
+}
+
+.latest-products__details {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-height: 76px;
+  padding: 12px 4px 0;
+}
+
+.latest-products__details h3 {
+  max-width: 100%;
+  font-size: 0.86rem;
+  font-weight: 500;
+  line-height: 1.7;
+}
+
+.latest-products__arrow {
+  position: absolute;
+  top: 42%;
+  z-index: 3;
+  display: grid;
+  width: 40px;
+  height: 48px;
+  place-items: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #1d1d1d;
+  cursor: pointer;
+  font-family: "Times New Roman", Georgia, serif;
+  font-size: 1.85rem;
+  line-height: 1;
+  opacity: 0.66;
+  transform: translateY(-50%);
+  transition: color 180ms ease, opacity 180ms ease, transform 180ms ease;
+}
+
+.latest-products__arrow:hover,
+.latest-products__arrow:focus-visible {
+  color: #000000;
+  opacity: 1;
+}
+
+.latest-products__arrow:focus-visible {
+  outline: 1px solid #111111;
+  outline-offset: 4px;
+}
+
+.latest-products__arrow--left:hover,
+.latest-products__arrow--left:focus-visible {
+  transform: translate(-3px, -50%);
+}
+
+.latest-products__arrow--right:hover,
+.latest-products__arrow--right:focus-visible {
+  transform: translate(3px, -50%);
+}
+
+.latest-products__arrow--left {
+  left: -18px;
+}
+
+.latest-products__arrow--right {
+  right: -18px;
+}
+
+.latest-products__position {
+  direction: ltr;
+  margin-top: 18px;
+  color: #666666;
+  font-family: "Times New Roman", Georgia, serif;
+  font-size: 0.78rem;
+  letter-spacing: 0;
+  text-align: center;
+}
+
 .reviews-band {
   background: #fbfaf8;
 }
@@ -1254,6 +1390,44 @@ p {
     padding: 72px 7vw;
   }
 
+  .latest-products {
+    padding: 76px 7vw 86px;
+  }
+
+  .latest-products__header {
+    margin-bottom: 34px;
+  }
+
+  .latest-products__header h2 {
+    font-size: 2.75rem;
+  }
+
+  .latest-products__slide {
+    padding-inline: 10px;
+  }
+
+  .latest-products__details {
+    min-height: 88px;
+    padding-top: 16px;
+  }
+
+  .latest-products__details h3 {
+    font-size: 1rem;
+  }
+
+  .latest-products__arrow {
+    width: 42px;
+    height: 56px;
+  }
+
+  .latest-products__arrow--left {
+    left: -52px;
+  }
+
+  .latest-products__arrow--right {
+    right: -52px;
+  }
+
   .category-listing-page {
     padding-inline: 5vw;
   }
@@ -1382,6 +1556,11 @@ p {
     height: auto;
     min-height: 80svh;
     transform: none !important;
+  }
+
+  .latest-products__track,
+  .latest-products__slide .garment-image {
+    transition: none;
   }
 
   .page-reveal-root [data-reveal] {

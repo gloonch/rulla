@@ -922,6 +922,141 @@ function ProductCard({ product }) {
   );
 }
 
+function LatestProductsCarousel({ products }) {
+  const latestProducts = useMemo(
+    () =>
+      [...products]
+        .sort((left, right) => {
+          const leftCreatedAt = Date.parse(left.createdAt || "") || 0;
+          const rightCreatedAt = Date.parse(right.createdAt || "") || 0;
+          return rightCreatedAt - leftCreatedAt;
+        })
+        .slice(0, 10),
+    [products],
+  );
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const maxIndex = Math.max(0, latestProducts.length - 2);
+
+  useEffect(() => {
+    setActiveIndex((current) => Math.min(current, maxIndex));
+  }, [maxIndex]);
+
+  useEffect(() => {
+    if (isPaused || maxIndex < 1) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      setActiveIndex((current) => (current >= maxIndex ? 0 : current + 1));
+    }, 3000);
+
+    return () => window.clearInterval(intervalId);
+  }, [isPaused, maxIndex]);
+
+  if (!latestProducts.length) return null;
+
+  const showPrevious = () => {
+    setActiveIndex((current) => (current <= 0 ? maxIndex : current - 1));
+  };
+
+  const showNext = () => {
+    setActiveIndex((current) => (current >= maxIndex ? 0 : current + 1));
+  };
+
+  const resumeAfterFocus = (event) => {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setIsPaused(false);
+    }
+  };
+
+  return (
+    <section
+      className="latest-products"
+      aria-labelledby="latest-products-heading"
+      aria-roledescription="carousel"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      onFocusCapture={() => setIsPaused(true)}
+      onBlurCapture={resumeAfterFocus}
+    >
+      <header className="latest-products__header">
+        <p className="eyebrow">NEW ARRIVALS</p>
+        <h2 id="latest-products-heading">جدیدترین محصولات</h2>
+      </header>
+
+      <div className="latest-products__shell">
+        <div className="latest-products__viewport">
+          <div
+            className="latest-products__track"
+            dir="ltr"
+            style={{ transform: `translate3d(-${activeIndex * 50}%, 0, 0)` }}
+          >
+            {latestProducts.map((product, index) => (
+              <article
+                key={product.slug}
+                className="latest-products__slide"
+                dir="rtl"
+                aria-hidden={index < activeIndex || index > activeIndex + 1}
+              >
+                <Link
+                  to={`/products/${product.slug}`}
+                  className="latest-products__image-link"
+                  tabIndex={index < activeIndex || index > activeIndex + 1 ? -1 : 0}
+                >
+                  <GarmentImage src={product.image} alt={product.title} />
+                </Link>
+                <div className="latest-products__details">
+                  <h3>
+                    <Link
+                      to={`/products/${product.slug}`}
+                      tabIndex={index < activeIndex || index > activeIndex + 1 ? -1 : 0}
+                    >
+                      {product.title}
+                    </Link>
+                  </h3>
+                  <Link
+                    to={`/products/${product.slug}`}
+                    className="text-link"
+                    tabIndex={index < activeIndex || index > activeIndex + 1 ? -1 : 0}
+                  >
+                    مشاهده محصول
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        {maxIndex > 0 ? (
+          <>
+            <button
+              type="button"
+              className="latest-products__arrow latest-products__arrow--left"
+              onClick={showPrevious}
+              aria-label="نمایش محصول قبلی"
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              className="latest-products__arrow latest-products__arrow--right"
+              onClick={showNext}
+              aria-label="نمایش محصول بعدی"
+            >
+              →
+            </button>
+          </>
+        ) : null}
+      </div>
+
+      {maxIndex > 0 ? (
+        <p className="latest-products__position" aria-live="polite">
+          {String(activeIndex + 1).padStart(2, "0")} / {String(maxIndex + 1).padStart(2, "0")}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 function ReviewsPreview() {
   return (
     <section className="section reviews-band" aria-labelledby="reviews-heading">
@@ -951,7 +1086,7 @@ function AppointmentCta() {
 }
 
 function HomePage() {
-  const { homepageSections } = useSiteContent();
+  const { homepageSections, products } = useSiteContent();
   const heroSections = homepageSections.filter((section) => section.id?.startsWith("hero-"));
   const staticSections = homepageSections.filter((section) => !section.id?.startsWith("hero-"));
   const categoryStackRef = useVisualSectionStack(staticSections.length);
@@ -961,6 +1096,7 @@ function HomePage() {
       <main className="home-editorial">
         <ContentStateNotice />
         <VisualCampaignCarousel sections={heroSections} />
+        <LatestProductsCarousel products={products} />
         <div ref={categoryStackRef} className="visual-section-stack" data-reveal-skip>
           {staticSections.map((section, index) => (
             <VisualCampaignSection key={section.id} section={section} stackIndex={index} />
