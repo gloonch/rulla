@@ -18,7 +18,6 @@ const MESSAGE_MIN_LENGTH = 10;
 const MESSAGE_MAX_LENGTH = 2000;
 const BUSINESS_PHONE = "09909038432";
 const WHATSAPP_URL = "https://wa.me/989909038432";
-const SMOOTH_SCROLL_MULTIPLIER = 1.5;
 
 const orderSteps = [
   "انتخاب مدل",
@@ -228,84 +227,6 @@ function ScrollToTop() {
 
     window.scrollTo({ top: 0, left: 0 });
   }, [pathname, hash]);
-
-  return null;
-}
-
-function SmoothScrollController() {
-  useEffect(() => {
-    const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    let targetY = window.scrollY;
-    let currentY = targetY;
-    let rafId = 0;
-
-    const maxScrollY = () => Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-
-    const scrollToInstant = (top) => {
-      const root = document.documentElement;
-      const previousBehavior = root.style.scrollBehavior;
-      root.style.scrollBehavior = "auto";
-      window.scrollTo(0, top);
-      root.style.scrollBehavior = previousBehavior;
-    };
-
-    const animate = () => {
-      currentY += (targetY - currentY) * 0.14;
-
-      if (Math.abs(targetY - currentY) > 0.6) {
-        scrollToInstant(currentY);
-        rafId = window.requestAnimationFrame(animate);
-        return;
-      }
-
-      scrollToInstant(targetY);
-      currentY = targetY;
-      rafId = 0;
-    };
-
-    const normalizeWheelDelta = (event) => {
-      if (event.deltaMode === 1) return event.deltaY * 16;
-      if (event.deltaMode === 2) return event.deltaY * window.innerHeight;
-      return event.deltaY;
-    };
-
-    const shouldUseNativeScroll = (event) => {
-      if (reducedMotionQuery.matches || event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey) return true;
-      if (document.body.classList.contains("menu-open")) return true;
-      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return true;
-
-      const target = event.target instanceof Element ? event.target : null;
-      return Boolean(target?.closest("input, textarea, select, [data-native-scroll]"));
-    };
-
-    const handleWheel = (event) => {
-      if (shouldUseNativeScroll(event)) return;
-
-      event.preventDefault();
-      targetY = Math.max(0, Math.min(maxScrollY(), targetY + normalizeWheelDelta(event) * SMOOTH_SCROLL_MULTIPLIER));
-
-      if (!rafId) {
-        currentY = window.scrollY;
-        rafId = window.requestAnimationFrame(animate);
-      }
-    };
-
-    const syncNativeScroll = () => {
-      if (!rafId) {
-        targetY = window.scrollY;
-        currentY = targetY;
-      }
-    };
-
-    window.addEventListener("wheel", handleWheel, { passive: false });
-    window.addEventListener("scroll", syncNativeScroll, { passive: true });
-
-    return () => {
-      window.removeEventListener("wheel", handleWheel);
-      window.removeEventListener("scroll", syncNativeScroll);
-      if (rafId) window.cancelAnimationFrame(rafId);
-    };
-  }, []);
 
   return null;
 }
@@ -745,9 +666,117 @@ function VisualCampaignCarousel({ sections }) {
   );
 }
 
-function VisualCampaignSection({ section }) {
+function useVisualSectionStack(itemCount) {
+  const stackRef = useRef(null);
+
+  useEffect(() => {
+    const stack = stackRef.current;
+    if (!stack || itemCount < 1) return undefined;
+
+    const items = [...stack.querySelectorAll("[data-stack-item]")];
+    const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let animationFrameId = 0;
+    let measurementsDirty = true;
+    let itemMetrics = [];
+    let startLine = 0;
+
+    const resetTransforms = () => {
+      stack.style.removeProperty("--stack-header-offset");
+      items.forEach((item) => {
+        item.style.removeProperty("--stack-scale");
+      });
+    };
+
+    const measureStack = () => {
+      const headerBottom = document.querySelector(".site-header")?.getBoundingClientRect().bottom || 0;
+      const headerOffset = Math.max(0, Math.round(headerBottom));
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      const stackTop = stack.getBoundingClientRect().top + window.scrollY;
+
+      stack.style.setProperty("--stack-header-offset", `${headerOffset}px`);
+      startLine = Math.max(headerOffset + 160, viewportHeight * 0.86);
+      itemMetrics = items.slice(1).map((item) => {
+        const itemOffset = Number.parseFloat(item.style.getPropertyValue("--stack-offset")) || 0;
+        const endLine = headerOffset + itemOffset;
+
+        return {
+          endLine,
+          naturalTop: stackTop + item.offsetTop,
+          travelDistance: Math.max(1, startLine - endLine),
+        };
+      });
+      measurementsDirty = false;
+    };
+
+    const updateStack = () => {
+      animationFrameId = 0;
+
+      if (reducedMotionQuery.matches) {
+        resetTransforms();
+        return;
+      }
+
+      if (measurementsDirty) measureStack();
+
+      let activeIndex = 0;
+      itemMetrics.forEach(({ endLine, naturalTop, travelDistance }) => {
+        const itemTop = Math.max(endLine, naturalTop - window.scrollY);
+        const progress = Math.min(1, Math.max(0, (startLine - itemTop) / travelDistance));
+        activeIndex += progress;
+      });
+
+      items.forEach((item, index) => {
+        const depth = Math.min(4, Math.max(0, activeIndex - index));
+        item.style.setProperty("--stack-scale", (1 - depth * 0.045).toFixed(4));
+      });
+    };
+
+    const scheduleUpdate = () => {
+      if (animationFrameId) return;
+      animationFrameId = window.requestAnimationFrame(updateStack);
+    };
+
+    const scheduleMeasurement = () => {
+      measurementsDirty = true;
+      scheduleUpdate();
+    };
+
+    const resizeObserver = "ResizeObserver" in window ? new ResizeObserver(scheduleMeasurement) : null;
+    resizeObserver?.observe(stack);
+    const header = document.querySelector(".site-header");
+    if (header) resizeObserver?.observe(header);
+
+    updateStack();
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleMeasurement);
+    reducedMotionQuery.addEventListener("change", scheduleMeasurement);
+
+    return () => {
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleMeasurement);
+      reducedMotionQuery.removeEventListener("change", scheduleMeasurement);
+      resizeObserver?.disconnect();
+      if (animationFrameId) window.cancelAnimationFrame(animationFrameId);
+      resetTransforms();
+    };
+  }, [itemCount]);
+
+  return stackRef;
+}
+
+function VisualCampaignSection({ section, stackIndex = 0 }) {
+  const stackOffset = stackIndex * 16;
+
   return (
-    <section className="visual-section" aria-labelledby={`visual-section-${section.id}`}>
+    <section
+      className="visual-section"
+      aria-labelledby={`visual-section-${section.id}`}
+      data-stack-item
+      style={{
+        "--stack-index": stackIndex,
+        "--stack-offset": `${stackOffset}px`,
+      }}
+    >
       <img
         src={section.image}
         alt={section.alt}
@@ -925,15 +954,18 @@ function HomePage() {
   const { homepageSections } = useSiteContent();
   const heroSections = homepageSections.filter((section) => section.id?.startsWith("hero-"));
   const staticSections = homepageSections.filter((section) => !section.id?.startsWith("hero-"));
+  const categoryStackRef = useVisualSectionStack(staticSections.length);
 
   return (
     <PageShell>
       <main className="home-editorial">
         <ContentStateNotice />
         <VisualCampaignCarousel sections={heroSections} />
-        {staticSections.map((section) => (
-          <VisualCampaignSection key={section.id} section={section} />
-        ))}
+        <div ref={categoryStackRef} className="visual-section-stack" data-reveal-skip>
+          {staticSections.map((section, index) => (
+            <VisualCampaignSection key={section.id} section={section} stackIndex={index} />
+          ))}
+        </div>
         <EditorialProcessSection />
       </main>
     </PageShell>
@@ -1327,7 +1359,6 @@ export default function App() {
       <BrowserRouter>
         <SiteContentProvider>
           <ScrollToTop />
-          <SmoothScrollController />
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/categories" element={<CategoriesPage />} />

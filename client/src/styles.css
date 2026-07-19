@@ -321,6 +321,28 @@ p {
   background: #111111;
 }
 
+.visual-section-stack {
+  --stack-header-offset: 60px;
+  position: relative;
+  isolation: isolate;
+  background: #f1f1ef;
+}
+
+.visual-section-stack .visual-section {
+  position: sticky;
+  top: calc(var(--stack-header-offset) + var(--stack-offset));
+  z-index: calc(var(--stack-index) + 1);
+  height: calc(100svh - var(--stack-header-offset) - var(--stack-offset));
+  min-height: min(80svh, calc(100svh - var(--stack-header-offset) - var(--stack-offset)));
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px 6px 0 0;
+  box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.18);
+  transform: translate3d(0, 0, 0) scale(var(--stack-scale, 1));
+  transform-origin: 50% 0;
+  backface-visibility: hidden;
+  will-change: transform;
+}
+
 .visual-section--carousel {
   isolation: isolate;
 }
@@ -1351,6 +1373,15 @@ p {
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+
+  .visual-section-stack .visual-section {
+    position: relative;
+    top: auto;
+    z-index: auto;
+    height: auto;
+    min-height: 80svh;
+    transform: none !important;
   }
 
   .page-reveal-root [data-reveal] {
